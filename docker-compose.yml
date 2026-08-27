@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: retrieval_search
+      POSTGRES_USER: retrieval
+      POSTGRES_PASSWORD: retrieval
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retrieval -d retrieval_search"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: retrieval_search
+      DB_USER: retrieval
+      DB_PASSWORD: retrieval
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

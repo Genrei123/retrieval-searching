@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 2924 >> stream
+BT /F1 10 Tf 12 TL 72 740 Td
+(Database Connection Pooling Every connection to a relational database carries real cost.) Tj T*
+(Opening a TCP socket, completing authentication, and negotiating a session on the server side) Tj T*
+(takes tens of milliseconds, and doing that for every query would make an application unusably) Tj T*
+(slow under any real load. Connection pooling solves this by keeping a set of already) Tj T*
+(established connections open and handing them out to application threads on demand, then) Tj T*
+(returning them to the pool instead of closing them when the work is done. HikariCP is the) Tj T*
+(default connection pool in Spring Boot applications and is widely regarded as the fastest and) Tj T*
+(most reliable option on the JVM. It achieves its speed through aggressive bytecode-level) Tj T*
+(optimization, minimal locking, and by avoiding unnecessary wrapper allocations around the) Tj T*
+(underlying JDBC driver objects. A HikariCP pool is configured primarily through a small number) Tj T*
+(of properties: maximum pool size, minimum idle connections, connection timeout, and max) Tj T*
+(lifetime. Sizing a connection pool correctly is less intuitive than it looks. A common mistake) Tj T*
+(is assuming that a larger pool always improves throughput. In practice, once the pool size) Tj T*
+(exceeds the number of CPU cores available to the database server, additional connections mostly) Tj T*
+(increase contention rather than parallelism, because the database itself becomes the) Tj T*
+(bottleneck. A widely cited formula for sizing is connections equal to core count times two,) Tj T*
+(plus the number of effective spindles, though this should always be validated against real load) Tj T*
+(testing rather than applied blindly. Pool exhaustion is one of the most common production) Tj T*
+(incidents involving connection pools. It happens when every connection in the pool is checked) Tj T*
+(out and none are returned quickly enough, so new requests queue up waiting for a connection) Tj T*
+(timeout. The usual causes are long running transactions holding a connection open, connections) Tj T*
+(leaked because a try-with-resources block was not used, or a downstream dependency slowing down) Tj T*
+(every query enough that the pool cannot keep up with demand. Monitoring pool utilization, wait) Tj T*
+(time, and connection lifetime is essential to catching this before it becomes an outage. Max) Tj T*
+(lifetime deserves particular attention. Database servers, load balancers, and firewalls) Tj T*
+(frequently close idle or long lived connections without warning the client. Setting max) Tj T*
+(lifetime slightly shorter than any such server side timeout ensures the pool proactively) Tj T*
+(retires connections before they are killed out from under an in flight query, which otherwise) Tj T*
+(surfaces as a confusing and intermittent connection reset error deep inside application code.) Tj T*
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+3286
+%%EOF

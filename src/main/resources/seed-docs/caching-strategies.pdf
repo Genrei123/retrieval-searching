@@ -1,0 +1,51 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 2976 >> stream
+BT /F1 10 Tf 12 TL 72 740 Td
+(Caching Strategies Caching is the practice of storing a copy of expensive-to-compute or) Tj T*
+(expensive-to-fetch data somewhere faster to access, so that a repeated request for the same) Tj T*
+(data can be served without repeating the original work. Nearly every performance problem in a) Tj T*
+(web application eventually gets addressed, at least partially, by caching something: a database) Tj T*
+(query result, a rendered page fragment, a computed aggregate, or the response of a slow) Tj T*
+(external service call. Redis is the most common choice for an external cache in modern backend) Tj T*
+(systems. It is an in-memory data store that supports simple key-value gets and sets as well as) Tj T*
+(richer structures like lists, sets, sorted sets, and hashes, all with sub-millisecond latency) Tj T*
+(under normal conditions. Because Redis runs as a separate process from the application, a cache) Tj T*
+(stored there is shared across every application instance, which matters as soon as a service) Tj T*
+(runs behind a load balancer with more than one replica. Cache eviction policy determines what) Tj T*
+(happens when the cache is full and a new item needs to be stored. Least recently used, commonly) Tj T*
+(abbreviated LRU, evicts whichever entry has gone the longest without being read, on the theory) Tj T*
+(that data accessed recently is likely to be accessed again soon. Least frequently used instead) Tj T*
+(tracks access counts and evicts the least popular entry. Time-based expiry, or a time to live) Tj T*
+(on each entry, is often layered on top of either policy so that stale data cannot remain cached) Tj T*
+(indefinitely even if it keeps getting accessed. Cache invalidation is famously one of the two) Tj T*
+(hard problems in computer science, and for good reason. Keeping cached data consistent with its) Tj T*
+(source of truth requires either expiring entries aggressively enough that staleness never) Tj T*
+(matters, or actively pushing invalidation events whenever the underlying data changes.) Tj T*
+(Write-through caching updates the cache synchronously whenever the source data is written,) Tj T*
+(keeping the two in lockstep at the cost of extra latency on writes. Write-behind caching) Tj T*
+(updates the cache immediately but defers the write to the source of truth, trading a small) Tj T*
+(consistency window for lower write latency. A cache stampede occurs when a popular cached entry) Tj T*
+(expires and a large number of concurrent requests all miss the cache at once, each) Tj T*
+(independently trying to regenerate the same expensive value and hammering the backing store) Tj T*
+(simultaneously. Common mitigations include locking so only one request regenerates the value) Tj T*
+(while others wait, or probabilistic early expiration so that entries refresh slightly before) Tj T*
+(they actually expire, spreading the regeneration load out over time instead of letting it land) Tj T*
+(all at once.) Tj T*
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+3338
+%%EOF

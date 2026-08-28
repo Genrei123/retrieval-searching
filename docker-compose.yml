@@ -15,19 +15,33 @@ services:
       timeout: 5s
       retries: 10
 
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    # Official image doesn't auto-pull a model, so start the server then pull llama3.2:3b once.
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 3 && ollama pull llama3.2:3b && wait"]
+
   app:
     build: .
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: retrieval_search
       DB_USER: retrieval
       DB_PASSWORD: retrieval
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:3b
     ports:
       - "8080:8080"
 
 volumes:
   pgdata:
+  ollama_data:

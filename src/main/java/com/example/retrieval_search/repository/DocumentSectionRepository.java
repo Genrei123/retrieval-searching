@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 public class DocumentSectionRepository {
@@ -14,6 +15,23 @@ public class DocumentSectionRepository {
 
     public DocumentSectionRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    public List<DocumentSection> findByIds(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = ids.stream().map(id -> "?").collect(Collectors.joining(","));
+        return jdbc.query(
+                "SELECT id, document_id, ordinal, heading_path, body, anchor FROM document_sections WHERE id IN (" + placeholders + ")",
+                ids.toArray(),
+                (rs, rowNum) -> new DocumentSection(
+                        UUID.fromString(rs.getString("id")),
+                        UUID.fromString(rs.getString("document_id")),
+                        rs.getInt("ordinal"),
+                        rs.getString("heading_path"),
+                        rs.getString("body"),
+                        rs.getString("anchor")));
     }
 
     public void deleteByDocumentId(UUID documentId) {

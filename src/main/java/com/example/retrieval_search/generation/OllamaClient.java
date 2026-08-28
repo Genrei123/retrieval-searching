@@ -11,10 +11,9 @@ public class OllamaClient {
     private final RestClient restClient;
     private final String model;
 
-    public OllamaClient(RestClient.Builder builder,
-                         @Value("${ollama.base-url}") String baseUrl,
+    public OllamaClient(@Value("${ollama.base-url}") String baseUrl,
                          @Value("${ollama.model}") String model) {
-        this.restClient = builder.baseUrl(baseUrl).build();
+        this.restClient = RestClient.create(baseUrl);
         this.model = model;
     }
 

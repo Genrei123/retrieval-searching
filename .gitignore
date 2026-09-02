@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+/nextjs-frontend/node_modules
+/nextjs-frontend/.next

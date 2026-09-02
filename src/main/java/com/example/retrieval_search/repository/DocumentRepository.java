@@ -29,6 +29,10 @@ public class DocumentRepository {
         this.jdbc = jdbc;
     }
 
+    public List<Document> findAll() {
+        return jdbc.query("SELECT * FROM documents ORDER BY ingested_at DESC", MAPPER);
+    }
+
     public Optional<Document> findByTitle(String title) {
         List<Document> results = jdbc.query(
                 "SELECT * FROM documents WHERE title = ?", MAPPER, title);

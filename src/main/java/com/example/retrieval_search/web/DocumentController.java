@@ -1,5 +1,6 @@
 package com.example.retrieval_search.web;
 
+import com.example.retrieval_search.domain.Document;
 import com.example.retrieval_search.domain.IngestionJob;
 import com.example.retrieval_search.ingestion.AsyncIngestionRunner;
 import com.example.retrieval_search.ingestion.JobStore;
@@ -15,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -54,6 +56,12 @@ public class DocumentController {
         asyncIngestionRunner.run(jobId, title, sourceUri, contentType, version, bytes);
 
         return ResponseEntity.accepted().body(new IngestResponse(jobId));
+    }
+
+    @Operation(summary = "List uploaded documents", description = "Returns all ingested documents, most recently ingested first.")
+    @GetMapping("/documents")
+    public List<Document> list() {
+        return documentRepository.findAll();
     }
 
     @Operation(summary = "Get ingestion job status")

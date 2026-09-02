@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -20,9 +22,11 @@ import java.util.UUID;
 public class AnswerController {
 
     private final GenerationService generationService;
+    private final AnswerStreamRunner answerStreamRunner;
 
-    public AnswerController(GenerationService generationService) {
+    public AnswerController(GenerationService generationService, AnswerStreamRunner answerStreamRunner) {
         this.generationService = generationService;
+        this.answerStreamRunner = answerStreamRunner;
     }
 
     @Operation(summary = "Answer a question using retrieved sections as context",
@@ -30,7 +34,7 @@ public class AnswerController {
     @GetMapping("/answer")
     public AnswerResponseDto answer(
             @RequestParam("q") String q,
-            @RequestParam(value = "topK", defaultValue = "5") int topK,
+            @RequestParam(value = "topK", defaultValue = "8") int topK,
             @RequestParam(value = "documentId", required = false) UUID documentId) {
 
         int cappedTopK = Math.min(Math.max(topK, 1), 10);
@@ -41,6 +45,22 @@ public class AnswerController {
 
         List<SearchResultDto> sources = outcome.sources().stream().map(this::toDto).toList();
         return new AnswerResponseDto(outcome.query(), outcome.text(), tookMs, sources);
+    }
+
+    @Operation(summary = "Answer a question, streaming the generated text as it is produced",
+            description = "Same retrieval as /answer, but emits Server-Sent Events: a single "
+                    + "'sources' event with the retrieved sections, then one 'token' event per "
+                    + "chunk of generated text, then a final 'done' event.")
+    @GetMapping("/answer/stream")
+    public SseEmitter answerStream(
+            @RequestParam("q") String q,
+            @RequestParam(value = "topK", defaultValue = "8") int topK,
+            @RequestParam(value = "documentId", required = false) UUID documentId) {
+
+        int cappedTopK = Math.min(Math.max(topK, 1), 10);
+        SseEmitter emitter = new SseEmitter(TimeUnit.MINUTES.toMillis(5));
+        answerStreamRunner.stream(emitter, q, cappedTopK, documentId);
+        return emitter;
     }
 
     private SearchResultDto toDto(SearchHit hit) {

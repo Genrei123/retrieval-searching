@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /** Orchestrates the retrieve-then-generate flow: run search, pull full section bodies for the
@@ -37,6 +38,33 @@ public class GenerationService {
 
     public RagOutcome explainTopic(String topic, int topK, UUID documentId) {
         return generate(topic, topK, documentId, this::topicPrompt);
+    }
+
+    /** Retrieves the same way as {@link #answerQuestion}, but streams the generated answer token
+     * by token instead of returning it all at once. {@code onSources} fires once, as soon as
+     * retrieval finishes; {@code onToken} fires once per chunk of generated text. */
+    public void streamAnswer(String question, int topK, UUID documentId,
+                              Consumer<List<SearchHit>> onSources, Consumer<String> onToken) {
+        SearchService.SearchOutcome outcome = searchService.search(question, 0, topK, documentId);
+        List<SearchHit> hits = outcome.hits();
+        onSources.accept(hits);
+
+        Map<UUID, DocumentSection> sectionsById = sectionRepository
+                .findByIds(hits.stream().map(SearchHit::sectionId).toList())
+                .stream()
+                .collect(Collectors.toMap(DocumentSection::id, s -> s));
+
+        List<DocumentSection> orderedContext = hits.stream()
+                .map(h -> sectionsById.get(h.sectionId()))
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (orderedContext.isEmpty()) {
+            onToken.accept("No relevant sections were found.");
+            return;
+        }
+
+        ollamaClient.generateStream(answerPrompt(buildContext(orderedContext), outcome.query()), onToken);
     }
 
     private RagOutcome generate(String query, int topK, UUID documentId,
@@ -69,8 +97,12 @@ public class GenerationService {
 
     private String answerPrompt(String context, String question) {
         return """
-                Answer the question using ONLY the context below. If the context does not contain \
-                the answer, say you don't know. Be concise and cite the section headings you used.
+                Answer the question using ONLY the context below. The context may not define the \
+                exact term directly — if so, synthesize the best answer you can from whatever \
+                related material is present (e.g. subsections of the topic, adjacent concepts) \
+                and note what aspect isn't fully covered. Only say you don't know if the context \
+                is genuinely unrelated to the question. Be concise and cite the section headings \
+                you used.
 
                 Context:
                 %s

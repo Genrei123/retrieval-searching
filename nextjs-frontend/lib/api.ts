@@ -1,0 +1,107 @@
+import { API_BASE_URL } from "@/lib/config";
+
+export type MatchType = "EXACT" | "SYNONYM" | "FUZZY";
+
+export type JobStatus = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED_UNCHANGED";
+
+export type SearchResult = {
+    sectionId: string;
+    documentId: string;
+    documentTitle: string;
+    headingPath: string | null;
+    anchor: string | null;
+    snippet: string;
+    score: number;
+    matchType: MatchType;
+};
+
+export type SearchResponse = {
+    query: string;
+    totalResults: number;
+    page: number;
+    size: number;
+    tookMs: number;
+    results: SearchResult[];
+};
+
+export type DocumentDto = {
+    id: string;
+    title: string;
+    sourceUri: string | null;
+    contentType: string;
+    version: string;
+    ingestedAt: string;
+    checksum: string;
+};
+
+export type IngestResponse = { jobId: string };
+
+export type JobStatusResponse = {
+    jobId: string;
+    status: JobStatus;
+    message: string | null;
+    documentId: string | null;
+};
+
+async function unwrap<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? `Request failed with ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+}
+
+export async function search(
+    query: string,
+    opts: { page?: number; size?: number; documentId?: string } = {},
+): Promise<SearchResponse> {
+    const params = new URLSearchParams({ q: query });
+    if (opts.page != null) params.set("page", String(opts.page));
+    if (opts.size != null) params.set("size", String(opts.size));
+    if (opts.documentId) params.set("documentId", opts.documentId);
+
+    const response = await fetch(`${API_BASE_URL}/search?${params}`);
+    return unwrap<SearchResponse>(response);
+}
+
+export async function listDocuments(): Promise<DocumentDto[]> {
+    const response = await fetch(`${API_BASE_URL}/documents`, { cache: "no-store" });
+    return unwrap<DocumentDto[]>(response);
+}
+
+export async function uploadDocument(
+    file: File,
+    title: string,
+    sourceUri?: string,
+): Promise<IngestResponse> {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title);
+    if (sourceUri) form.append("sourceUri", sourceUri);
+
+    const response = await fetch(`${API_BASE_URL}/documents`, {
+        method: "POST",
+        body: form,
+    });
+    return unwrap<IngestResponse>(response);
+}
+
+export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
+    const response = await fetch(`${API_BASE_URL}/documents/jobs/${jobId}`, { cache: "no-store" });
+    return unwrap<JobStatusResponse>(response);
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/documents/${id}`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? `Delete failed with ${response.status}`);
+    }
+}
+
+export function answerStreamUrl(question: string, opts: { topK?: number; documentId?: string } = {}): string {
+    const params = new URLSearchParams({ q: question });
+    if (opts.topK != null) params.set("topK", String(opts.topK));
+    if (opts.documentId) params.set("documentId", opts.documentId);
+    return `${API_BASE_URL}/answer/stream?${params}`;
+}

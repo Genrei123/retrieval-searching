@@ -33,7 +33,7 @@ public class AnswerStreamRunner {
         try {
             generationService.streamAnswer(question, topK, documentId,
                     sources -> send(emitter, "sources", toDtos(sources), MediaType.APPLICATION_JSON),
-                    token -> send(emitter, "token", token, MediaType.APPLICATION_JSON));
+                    token -> send(emitter, "token", new TokenPayload(token), MediaType.APPLICATION_JSON));
             send(emitter, "done", "", MediaType.TEXT_PLAIN);
             emitter.complete();
         } catch (Exception e) {
@@ -50,10 +50,17 @@ public class AnswerStreamRunner {
                 .toList();
     }
 
-    /** Always serializes as JSON (even a plain token string), never as raw text: a raw string
-     * data line starting with a space would have that leading space silently stripped by the
-     * browser's EventSource parser (one leading space after "data:" is spec-mandated to be
-     * trimmed), which is exactly where word-initial spaces from the LLM's token stream live. */
+    /** Always serializes as JSON, never as raw text: a raw string data line starting with a
+     * space would have that leading space silently stripped by the browser's EventSource parser
+     * (one leading space after "data:" is spec-mandated to be trimmed), which is exactly where
+     * word-initial spaces from the LLM's token stream live. Note that a bare String payload
+     * doesn't actually get JSON-encoded even when asked to: Spring's StringHttpMessageConverter
+     * advertises "*&#47;*" as a supported media type, so it wins over the JSON converter for any
+     * String regardless of the MediaType passed here — wrapping the token in a record sidesteps
+     * that converter entirely, since it only handles String/CharSequence. */
+    private record TokenPayload(String token) {
+    }
+
     private void send(SseEmitter emitter, String eventName, Object data, MediaType mediaType) {
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data, mediaType));

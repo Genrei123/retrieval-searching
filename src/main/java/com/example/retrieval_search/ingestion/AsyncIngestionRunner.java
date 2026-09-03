@@ -27,11 +27,12 @@ public class AsyncIngestionRunner {
     }
 
     @Async
-    public void run(UUID jobId, String title, String sourceUri, String contentType, String version, byte[] bytes) {
+    public void run(UUID jobId, String title, String sourceUri, String contentType, String version,
+                     String filename, byte[] bytes) {
         jobStore.update(jobId, JobStatus.RUNNING, null, null);
         try {
             IngestionService.IngestOutcome outcome =
-                    ingestionService.ingest(title, sourceUri, contentType, version, bytes);
+                    ingestionService.ingest(title, sourceUri, contentType, version, filename, bytes);
             jobStore.update(jobId, outcome.status(), outcome.message(), outcome.documentId());
         } catch (Exception e) {
             log.warn("Ingestion job {} failed", jobId, e);

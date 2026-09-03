@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { deleteDocument, listDocuments, type DocumentDto } from "@/lib/api";
+import { documentHref } from "@/lib/links";
 
 export function DocumentList({ refreshKey }: { refreshKey: number }) {
     const [documents, setDocuments] = useState<DocumentDto[] | null>(null);
@@ -44,9 +46,10 @@ export function DocumentList({ refreshKey }: { refreshKey: number }) {
             {documents.map((doc) => (
                 <li
                     key={doc.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 px-4 py-3"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 transition focus-within:border-stone-400 hover:border-stone-400"
                 >
-                    <div className="min-w-0">
+                    {/* Opens the document in the Search tab, which doubles as the reader. */}
+                    <Link href={documentHref(doc.id)} className="min-w-0 flex-1 px-4 py-3">
                         <div className="truncate text-sm font-medium text-stone-900">
                             {doc.title}
                         </div>
@@ -54,12 +57,12 @@ export function DocumentList({ refreshKey }: { refreshKey: number }) {
                             {doc.contentType} · v{doc.version} ·{" "}
                             {new Date(doc.ingestedAt).toLocaleString()}
                         </div>
-                    </div>
+                    </Link>
                     <button
                         type="button"
                         onClick={() => handleDelete(doc.id)}
                         disabled={deletingId === doc.id}
-                        className="shrink-0 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:border-red-300 hover:text-red-600 disabled:opacity-40"
+                        className="mr-4 shrink-0 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:border-red-300 hover:text-red-600 disabled:opacity-40"
                     >
                         {deletingId === doc.id ? "Removing…" : "Remove"}
                     </button>

@@ -41,7 +41,8 @@ public class SeedDataLoader implements ApplicationRunner {
             byte[] bytes = resource.getContentAsByteArray();
 
             IngestionService.IngestOutcome outcome =
-                    ingestionService.ingest(title, "classpath:seed-docs/" + filename, contentType, "seed-1", bytes);
+                    ingestionService.ingest(
+                            title, "classpath:seed-docs/" + filename, contentType, "seed-1", filename, bytes);
             log.info("Seed ingest [{}]: {} ({})", title, outcome.status(), outcome.message());
         }
     }

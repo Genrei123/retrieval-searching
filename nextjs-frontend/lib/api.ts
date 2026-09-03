@@ -34,6 +34,28 @@ export type DocumentDto = {
     checksum: string;
 };
 
+export type DocumentSectionDto = {
+    id: string;
+    ordinal: number;
+    headingPath: string | null;
+    anchor: string | null;
+    body: string;
+};
+
+/** Describes the file as uploaded. Null for documents ingested before the backend kept
+ * originals — those can only be read as sections until the file is uploaded again. */
+export type DocumentFileInfo = {
+    filename: string | null;
+    mediaType: string;
+    byteSize: number;
+};
+
+export type DocumentContent = {
+    document: DocumentDto;
+    original: DocumentFileInfo | null;
+    sections: DocumentSectionDto[];
+};
+
 export type IngestResponse = { jobId: string };
 
 export type JobStatusResponse = {
@@ -67,6 +89,24 @@ export async function search(
 export async function listDocuments(): Promise<DocumentDto[]> {
     const response = await fetch(`${API_BASE_URL}/documents`, { cache: "no-store" });
     return unwrap<DocumentDto[]>(response);
+}
+
+export async function getDocument(id: string): Promise<DocumentDto> {
+    const response = await fetch(`${API_BASE_URL}/documents/${id}`, { cache: "no-store" });
+    return unwrap<DocumentDto>(response);
+}
+
+/** The document plus all of its sections in reading order — used to show a search hit or an
+ * answer source inside the document it came from. */
+export async function getDocumentContent(id: string): Promise<DocumentContent> {
+    const response = await fetch(`${API_BASE_URL}/documents/${id}/content`, { cache: "no-store" });
+    return unwrap<DocumentContent>(response);
+}
+
+/** The original file, served with its own media type — embed it (PDF) or fetch it (markdown,
+ * HTML) rather than reconstructing the document from sections. */
+export function documentFileUrl(id: string): string {
+    return `${API_BASE_URL}/documents/${id}/file`;
 }
 
 export async function uploadDocument(

@@ -1,15 +1,25 @@
 package com.example.retrieval_search.web;
 
 import com.example.retrieval_search.domain.Document;
+import com.example.retrieval_search.domain.DocumentFile;
+import com.example.retrieval_search.domain.DocumentSection;
 import com.example.retrieval_search.domain.IngestionJob;
 import com.example.retrieval_search.ingestion.AsyncIngestionRunner;
 import com.example.retrieval_search.ingestion.JobStore;
+import com.example.retrieval_search.repository.DocumentFileRepository;
 import com.example.retrieval_search.repository.DocumentRepository;
+import com.example.retrieval_search.repository.DocumentSectionRepository;
+import com.example.retrieval_search.web.dto.DocumentContentDto;
+import com.example.retrieval_search.web.dto.DocumentFileInfoDto;
+import com.example.retrieval_search.web.dto.DocumentSectionDto;
 import com.example.retrieval_search.web.dto.IngestResponse;
 import com.example.retrieval_search.web.dto.JobStatusResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,12 +38,18 @@ public class DocumentController {
     private final AsyncIngestionRunner asyncIngestionRunner;
     private final JobStore jobStore;
     private final DocumentRepository documentRepository;
+    private final DocumentSectionRepository documentSectionRepository;
+    private final DocumentFileRepository documentFileRepository;
 
     public DocumentController(AsyncIngestionRunner asyncIngestionRunner, JobStore jobStore,
-                               DocumentRepository documentRepository) {
+                               DocumentRepository documentRepository,
+                               DocumentSectionRepository documentSectionRepository,
+                               DocumentFileRepository documentFileRepository) {
         this.asyncIngestionRunner = asyncIngestionRunner;
         this.jobStore = jobStore;
         this.documentRepository = documentRepository;
+        this.documentSectionRepository = documentSectionRepository;
+        this.documentFileRepository = documentFileRepository;
     }
 
     @Operation(summary = "Upload a document for ingestion", description = "Accepts a PDF, Markdown, or HTML file and starts an async ingestion job.")
@@ -53,7 +69,7 @@ public class DocumentController {
         }
 
         UUID jobId = jobStore.create();
-        asyncIngestionRunner.run(jobId, title, sourceUri, contentType, version, bytes);
+        asyncIngestionRunner.run(jobId, title, sourceUri, contentType, version, file.getOriginalFilename(), bytes);
 
         return ResponseEntity.accepted().body(new IngestResponse(jobId));
     }
@@ -62,6 +78,47 @@ public class DocumentController {
     @GetMapping("/documents")
     public List<Document> list() {
         return documentRepository.findAll();
+    }
+
+    @Operation(summary = "Get a single document", description = "Returns the document's metadata, without its sections.")
+    @GetMapping("/documents/{id}")
+    public Document get(@PathVariable UUID id) {
+        return documentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown document: " + id));
+    }
+
+    @Operation(summary = "Get a document's full content",
+            description = "Returns the document plus every section of it in reading order, so a search hit or "
+                    + "answer source can be read in context.")
+    @GetMapping("/documents/{id}/content")
+    public DocumentContentDto content(@PathVariable UUID id) {
+        Document document = get(id);
+        List<DocumentSectionDto> sections = documentSectionRepository.findByDocumentId(id).stream()
+                .map(DocumentController::toDto)
+                .toList();
+        DocumentFileInfoDto original = documentFileRepository.findInfoByDocumentId(id)
+                .map(file -> new DocumentFileInfoDto(file.filename(), file.mediaType(), file.byteSize()))
+                .orElse(null);
+        return new DocumentContentDto(document, original, sections);
+    }
+
+    @Operation(summary = "Download a document's original file",
+            description = "Serves the file exactly as it was uploaded. 404 for documents ingested before "
+                    + "originals were kept — re-upload the file to store one.")
+    @GetMapping("/documents/{id}/file")
+    public ResponseEntity<byte[]> file(@PathVariable UUID id) {
+        DocumentFile file = documentFileRepository.findByDocumentId(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "No original file stored for document: " + id));
+
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(file.filename() != null ? file.filename() : "document")
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.mediaType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(file.content());
     }
 
     @Operation(summary = "Get ingestion job status")
@@ -80,6 +137,11 @@ public class DocumentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown document: " + id);
         }
         return ResponseEntity.noContent().build();
+    }
+
+    private static DocumentSectionDto toDto(DocumentSection section) {
+        return new DocumentSectionDto(
+                section.id(), section.ordinal(), section.headingPath(), section.anchor(), section.body());
     }
 
     private String detectContentType(String filename) {

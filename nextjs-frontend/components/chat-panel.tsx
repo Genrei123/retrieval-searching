@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useAnswerStream } from "@/hooks/use-answer-stream";
+import Link from "next/link";
+import { useAsk } from "@/components/ask-store";
+import { documentHref } from "@/lib/links";
 import { Markdown } from "@/components/markdown";
+import { Snippet } from "@/components/snippet";
 
 export function ChatPanel() {
-    const [input, setInput] = useState("");
-    const { question, answer, sources, status, error, ask } = useAnswerStream();
+    const { input, setInput, question, answer, sources, status, error, ask } = useAsk();
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -59,13 +60,27 @@ export function ChatPanel() {
                             <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
                                 Sources
                             </div>
-                            <ul className="space-y-2">
+                            <ul className="flex flex-col gap-2">
                                 {sources.map((s) => (
-                                    <li key={s.sectionId} className="text-sm text-stone-600">
-                                        <span className="font-medium text-stone-800">
-                                            {s.documentTitle}
-                                        </span>
-                                        {s.headingPath && <span> — {s.headingPath}</span>}
+                                    <li key={s.sectionId}>
+                                        <Link
+                                            href={documentHref(s.documentId, s.sectionId)}
+                                            className="block rounded-xl border border-stone-200 p-3 transition hover:border-stone-400"
+                                        >
+                                            <div className="text-sm text-stone-600">
+                                                <span className="font-medium text-stone-800">
+                                                    {s.documentTitle}
+                                                </span>
+                                                {s.headingPath && <span> — {s.headingPath}</span>}
+                                            </div>
+                                            <Snippet
+                                                text={s.snippet}
+                                                className="mt-1 text-sm leading-relaxed text-stone-500"
+                                            />
+                                            <span className="mt-2 inline-block text-xs text-stone-400">
+                                                Read this passage in the document →
+                                            </span>
+                                        </Link>
                                     </li>
                                 ))}
                             </ul>

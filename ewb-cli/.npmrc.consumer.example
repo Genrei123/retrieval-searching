@@ -1,0 +1,5 @@
+; Anyone INSTALLING @ewb/cli needs this in their own project root, plus their own
+; credentials in ~/.npmrc. A private Azure feed is not reachable without both.
+
+@ewb:registry=https://pkgs.dev.azure.com/YOUR-ORG/YOUR-PROJECT/_packaging/YOUR-FEED/npm/registry/
+always-auth=true

@@ -33,3 +33,8 @@ build/
 .vscode/
 /nextjs-frontend/node_modules
 /nextjs-frontend/.next
+
+### ewb-cli ###
+/ewb-cli/node_modules
+/ewb-cli/dist
+/ewb-cli/*.tgz

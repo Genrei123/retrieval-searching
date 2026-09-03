@@ -1,0 +1,539 @@
+/*
+ * @ewb/cli — component styles.
+ *
+ * Every component renders a root element carrying `.ewb-root`, and every selector below is
+ * scoped under it, so importing this file cannot restyle the host application. Retheming is
+ * done by redefining the custom properties, either globally or on one subtree:
+ *
+ *   .ewb-root { --ewb-accent: #2563eb; --ewb-radius: 10px; }
+ *
+ * The palette is light by default and follows the viewer's `prefers-color-scheme`. To pin one
+ * scheme regardless, set `data-theme="light"` or `data-theme="dark"` on the component (or on any
+ * ancestor, since the attribute is inherited through the selector below).
+ */
+
+.ewb-root {
+    /* Palette — light */
+    --ewb-bg: #ffffff;
+    --ewb-surface: #fafaf9;
+    --ewb-surface-hover: #f5f5f4;
+    --ewb-fg: #1c1917;
+    --ewb-muted: #78716c;
+    --ewb-accent: #1c1917;
+    --ewb-accent-fg: #ffffff;
+    --ewb-danger: #dc2626;
+    --ewb-border: #e7e5e4;
+    --ewb-border-strong: #d6d3d1;
+    --ewb-mark-bg: #fef3c7;
+    --ewb-mark-fg: #1c1917;
+    --ewb-focus: #a8a29e;
+
+    /* Metrics */
+    --ewb-radius: 8px;
+    --ewb-gap: 16px;
+    --ewb-pad: 16px;
+    --ewb-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+        sans-serif;
+    --ewb-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ewb-font-size: 14px;
+    --ewb-line: 1.6;
+
+    box-sizing: border-box;
+    font-family: var(--ewb-font);
+    font-size: var(--ewb-font-size);
+    line-height: var(--ewb-line);
+    color: var(--ewb-fg);
+}
+
+@media (prefers-color-scheme: dark) {
+    .ewb-root:not([data-theme="light"]) {
+        --ewb-bg: #0c0a09;
+        --ewb-surface: #1c1917;
+        --ewb-surface-hover: #262322;
+        --ewb-fg: #e7e5e4;
+        --ewb-muted: #a8a29e;
+        --ewb-accent: #e7e5e4;
+        --ewb-accent-fg: #1c1917;
+        --ewb-danger: #f87171;
+        --ewb-border: #292524;
+        --ewb-border-strong: #44403c;
+        --ewb-mark-bg: #44403c;
+        --ewb-mark-fg: #fafaf9;
+        --ewb-focus: #78716c;
+    }
+}
+
+.ewb-root[data-theme="dark"] {
+    --ewb-bg: #0c0a09;
+    --ewb-surface: #1c1917;
+    --ewb-surface-hover: #262322;
+    --ewb-fg: #e7e5e4;
+    --ewb-muted: #a8a29e;
+    --ewb-accent: #e7e5e4;
+    --ewb-accent-fg: #1c1917;
+    --ewb-danger: #f87171;
+    --ewb-border: #292524;
+    --ewb-border-strong: #44403c;
+    --ewb-mark-bg: #44403c;
+    --ewb-mark-fg: #fafaf9;
+    --ewb-focus: #78716c;
+}
+
+.ewb-root *,
+.ewb-root *::before,
+.ewb-root *::after {
+    box-sizing: inherit;
+}
+
+/* ── Shared atoms ─────────────────────────────────────────────────────────── */
+
+.ewb-muted {
+    color: var(--ewb-muted);
+}
+
+.ewb-error {
+    margin: 0;
+    color: var(--ewb-danger);
+    font-size: 0.93em;
+}
+
+.ewb-sectiontitle {
+    color: var(--ewb-muted);
+    font-size: 0.85em;
+}
+
+.ewb-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Caret shown while an answer is streaming. */
+.ewb-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    background: var(--ewb-muted);
+    vertical-align: text-bottom;
+    animation: ewb-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ewb-blink {
+    to {
+        visibility: hidden;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ewb-cursor {
+        animation: none;
+    }
+}
+
+/* ── Button ───────────────────────────────────────────────────────────────── */
+
+.ewb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: var(--ewb-radius);
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.95em;
+    font-weight: 500;
+    line-height: 1;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.ewb-btn--sm {
+    padding: 6px 12px;
+    font-size: 0.9em;
+}
+
+.ewb-btn--solid {
+    background: var(--ewb-accent);
+    color: var(--ewb-accent-fg);
+}
+
+.ewb-btn--solid:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
+.ewb-btn--ghost {
+    border-color: var(--ewb-border-strong);
+    color: var(--ewb-fg);
+}
+
+.ewb-btn--ghost:hover:not(:disabled) {
+    background: var(--ewb-surface-hover);
+}
+
+.ewb-btn--danger {
+    border-color: var(--ewb-border-strong);
+    color: var(--ewb-danger);
+}
+
+.ewb-btn--danger:hover:not(:disabled) {
+    border-color: var(--ewb-danger);
+    background: var(--ewb-surface-hover);
+}
+
+.ewb-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.ewb-btn:focus-visible {
+    outline: 2px solid var(--ewb-focus);
+    outline-offset: 2px;
+}
+
+.ewb-btn__spinner {
+    display: inline-block;
+    width: 0.75em;
+    height: 0.75em;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: ewb-spin 700ms linear infinite;
+}
+
+@keyframes ewb-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ewb-btn__spinner {
+        animation-duration: 2.4s;
+    }
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+
+.ewb-input {
+    width: 100%;
+    border: 1px solid var(--ewb-border-strong);
+    border-radius: var(--ewb-radius);
+    background: var(--ewb-bg);
+    color: var(--ewb-fg);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.ewb-input::placeholder {
+    color: var(--ewb-muted);
+}
+
+.ewb-input:focus {
+    border-color: var(--ewb-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ewb-focus) 25%, transparent);
+}
+
+.ewb-input:disabled {
+    opacity: 0.55;
+}
+
+.ewb-input--invalid {
+    border-color: var(--ewb-danger);
+}
+
+.ewb-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ewb-label {
+    color: var(--ewb-fg);
+    font-size: 0.93em;
+    font-weight: 500;
+}
+
+.ewb-field__error {
+    margin: 0;
+    color: var(--ewb-danger);
+    font-size: 0.85em;
+}
+
+/* ── Cards (answer sources and search results) ────────────────────────────── */
+
+.ewb-card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--ewb-border);
+    border-radius: var(--ewb-radius);
+    background: var(--ewb-bg);
+    padding: var(--ewb-pad);
+    color: inherit;
+    text-decoration: none;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.ewb-card--interactive {
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.ewb-card--interactive:hover {
+    border-color: var(--ewb-border-strong);
+    background: var(--ewb-surface);
+}
+
+.ewb-card:focus-visible {
+    outline: 2px solid var(--ewb-focus);
+    outline-offset: 2px;
+}
+
+.ewb-card__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.ewb-card__title {
+    color: var(--ewb-fg);
+    font-weight: 500;
+}
+
+.ewb-card__heading {
+    color: var(--ewb-muted);
+    font-weight: 400;
+}
+
+.ewb-badge {
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--ewb-surface-hover);
+    padding: 2px 8px;
+    color: var(--ewb-muted);
+    font-size: 0.75em;
+}
+
+/* ── Snippets (Postgres ts_headline output) ───────────────────────────────── */
+
+.ewb-snippet {
+    margin: 4px 0 0;
+    color: var(--ewb-muted);
+    font-size: 0.93em;
+}
+
+.ewb-snippet__mark {
+    background: var(--ewb-mark-bg);
+    color: var(--ewb-mark-fg);
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
+/* ── Containers ───────────────────────────────────────────────────────────── */
+
+.ewb-chat,
+.ewb-search,
+.ewb-login {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ewb-gap);
+    background: var(--ewb-bg);
+    border: 1px solid var(--ewb-border);
+    border-radius: var(--ewb-radius);
+    padding: var(--ewb-pad);
+}
+
+.ewb-chat__form,
+.ewb-search__form {
+    display: flex;
+    gap: 8px;
+}
+
+.ewb-chat__exchange {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ewb-gap);
+    border-top: 1px solid var(--ewb-border);
+    padding-top: var(--ewb-gap);
+}
+
+.ewb-chat__question {
+    color: var(--ewb-muted);
+    font-size: 0.93em;
+}
+
+.ewb-chat__answer {
+    color: var(--ewb-fg);
+}
+
+.ewb-chat__sources {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--ewb-border);
+    padding-top: var(--ewb-gap);
+}
+
+/* ── Search ───────────────────────────────────────────────────────────────── */
+
+.ewb-search__results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ewb-gap);
+}
+
+.ewb-search__meta {
+    color: var(--ewb-muted);
+    font-size: 0.88em;
+}
+
+.ewb-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--ewb-muted);
+    font-size: 0.9em;
+}
+
+/* ── LoginForm ────────────────────────────────────────────────────────────── */
+
+.ewb-login {
+    max-width: 380px;
+}
+
+.ewb-login__heading {
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 600;
+}
+
+.ewb-login__submit {
+    width: 100%;
+}
+
+/* ── Streamed markdown ────────────────────────────────────────────────────── */
+
+.ewb-md > :first-child {
+    margin-top: 0;
+}
+
+.ewb-md > :last-child {
+    margin-bottom: 0;
+}
+
+.ewb-md p {
+    margin: 8px 0;
+}
+
+.ewb-md h1,
+.ewb-md h2,
+.ewb-md h3 {
+    margin: 16px 0 8px;
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.ewb-md strong {
+    font-weight: 600;
+}
+
+.ewb-md a {
+    color: var(--ewb-fg);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--ewb-border-strong);
+}
+
+.ewb-md a:hover {
+    text-decoration-color: currentColor;
+}
+
+.ewb-md ul,
+.ewb-md ol {
+    margin: 8px 0;
+    padding-left: 22px;
+}
+
+.ewb-md li {
+    margin: 2px 0;
+}
+
+.ewb-md li::marker {
+    color: var(--ewb-muted);
+}
+
+.ewb-md code {
+    background: var(--ewb-surface-hover);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--ewb-font-mono);
+    font-size: 0.9em;
+}
+
+.ewb-md pre {
+    margin: 12px 0;
+    overflow-x: auto;
+    background: var(--ewb-surface);
+    border: 1px solid var(--ewb-border);
+    border-radius: var(--ewb-radius);
+    padding: 12px;
+    font-family: var(--ewb-font-mono);
+    font-size: 0.9em;
+}
+
+.ewb-md pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+.ewb-md blockquote {
+    margin: 8px 0;
+    border-left: 2px solid var(--ewb-border-strong);
+    padding-left: 12px;
+    color: var(--ewb-muted);
+}
+
+.ewb-md hr {
+    margin: 16px 0;
+    border: none;
+    border-top: 1px solid var(--ewb-border);
+}
+
+.ewb-md__table-wrap {
+    margin: 12px 0;
+    overflow-x: auto;
+}
+
+.ewb-md table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.ewb-md th,
+.ewb-md td {
+    border-bottom: 1px solid var(--ewb-border);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.ewb-md th {
+    color: var(--ewb-muted);
+    font-weight: 500;
+}

@@ -78,7 +78,7 @@ export function SearchPanel() {
             {documentId && (
                 <div className="flex flex-col gap-3">
                     <Link
-                        href="/search"
+                        href="/documents"
                         className="text-sm text-stone-500 underline-offset-2 transition hover:text-stone-900 hover:underline"
                     >
                         ← Back to all documents

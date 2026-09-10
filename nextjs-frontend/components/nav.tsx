@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const LINKS = [
-    { href: "/", label: "Ask" },
+    { href: "/", label: "Home" },
+    { href: "/ask", label: "Ask" },
     { href: "/search", label: "Search" },
     { href: "/documents", label: "Documents" },
 ];
@@ -14,7 +16,10 @@ export function Nav() {
 
     return (
         <nav className="border-b border-stone-200">
-            <div className="mx-auto flex max-w-4xl items-center gap-1 px-6">
+            <div className="mx-auto flex max-w-6xl items-center gap-1 px-6">
+                <span className="mr-4 text-sm font-medium tracking-tight text-stone-950">
+                    Jarvis
+                </span>
                 {LINKS.map((link) => {
                     const active = pathname === link.href;
                     return (
@@ -34,6 +39,8 @@ export function Nav() {
                         </Link>
                     );
                 })}
+
+                <ThemeToggle />
             </div>
         </nav>
     );

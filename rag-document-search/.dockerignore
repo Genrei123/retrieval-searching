@@ -1,0 +1,5 @@
+# Build context for the Spring Boot image — keep it to pom.xml + src.
+target/
+.idea/
+.mvn/wrapper/maven-wrapper.jar
+*.md

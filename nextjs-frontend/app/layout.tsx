@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Retrieval Search",
+    title: "Jarvis",
     description: "Search, browse, and ask questions over your ingested documents.",
 };
 
@@ -25,10 +25,23 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
+        // The theme script below writes `class="dark"` onto this element before React
+        // hydrates, so the server's markup and the client's disagree by design.
         <html
             lang="en"
+            suppressHydrationWarning
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
         >
+            <head>
+                {/* Runs before first paint, so a dark-theme user never sees a white flash.
+                    It is inline and dependency-free for that reason — anything imported
+                    would arrive too late. The key matches THEME_KEY in lib/theme.ts. */}
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `(function(){try{var p=localStorage.getItem('jarvis.theme');var d=p==='dark'||((!p||p==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`,
+                    }}
+                />
+            </head>
             <body className="min-h-full bg-white text-stone-950">
                 <Providers>
                     <Nav />

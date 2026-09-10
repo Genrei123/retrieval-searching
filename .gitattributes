@@ -1,2 +1,8 @@
-/mvnw text eol=lf
+# Normalise line endings so a Windows clone still produces Linux-safe files.
+* text=auto
+rag-document-search/mvnw text eol=lf
 *.cmd text eol=crlf
+# Executed inside Linux containers (n8n seeding, Postgres init) — CRLF breaks them.
+*.sh text eol=lf
+# Seed corpus — never line-ending-normalise these.
+*.pdf binary

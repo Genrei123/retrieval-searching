@@ -36,5 +36,6 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · react-ma
 
 No server-side API routes of its own — every backend call happens directly from the browser
 against `NEXT_PUBLIC_API_BASE_URL` (see `lib/api.ts`), which requires the backend's CORS config
-(`app.cors.allowed-origins` in `../src/main/resources/application.yaml`) to include this app's
+(`app.cors.allowed-origins` in
+`../rag-document-search/src/main/resources/application.yaml`) to include this app's
 origin.

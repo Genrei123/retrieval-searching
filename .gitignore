@@ -31,10 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Next.js frontend ###
 /nextjs-frontend/node_modules
 /nextjs-frontend/.next
+/nextjs-frontend/tsconfig.tsbuildinfo
 
-### ewb-cli ###
-/ewb-cli/node_modules
-/ewb-cli/dist
-/ewb-cli/*.tgz
+### Docker / local secrets ###
+.env

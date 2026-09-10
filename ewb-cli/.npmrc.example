@@ -1,6 +1,0 @@
-; Copy to .npmrc and fill in your Azure DevOps org / project / feed.
-; This file carries NO credentials — it only says where the @ewb scope lives.
-; Credentials go in your USER-level ~/.npmrc (see README), never here, never in git.
-
-@ewb:registry=https://pkgs.dev.azure.com/YOUR-ORG/YOUR-PROJECT/_packaging/YOUR-FEED/npm/registry/
-always-auth=true

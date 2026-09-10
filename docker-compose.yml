@@ -1,6 +1,13 @@
+# Jarvis — one stack: the retrieval API, its Next.js UI, and n8n automation.
+#   docker compose up -d
+# Secrets come from .env (see .env.example).
+name: jarvis
+
 services:
+  # --- Retrieval backing services -----------------------------------------
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: retrieval_search
       POSTGRES_USER: retrieval
@@ -17,6 +24,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
     ports:
@@ -38,8 +46,15 @@ services:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["/bin/sh", "-c", "until ollama pull llama3.2:3b; do echo 'pull failed, retrying in 5s...'; sleep 5; done"]
 
+  # --- Jarvis ---------------------------------------------------------------
   app:
-    build: .
+    build: ./rag-document-search
+    image: jarvis-backend:latest
+    # Built locally, never published to a registry — without this Compose tries
+    # to pull `jarvis-backend` on every `up` and warns when the pull is denied.
+    # `never` = use the local image; Compose still builds it when absent.
+    pull_policy: never
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,9 +68,124 @@ services:
       DB_PASSWORD: retrieval
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: llama3.2:3b
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
     ports:
       - "8080:8080"
+
+  frontend:
+    build:
+      context: ./nextjs-frontend
+      args:
+        # Baked into the client bundle: the browser resolves this, not the
+        # compose network, so it points at the host-published backend port.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8080/api/v1
+        # Likewise for the homepage briefing: the browser calls n8n's webhook
+        # directly, on the host-published n8n port.
+        NEXT_PUBLIC_N8N_BRIEFING_URL: http://localhost:5678/webhook/jarvis-briefing
+        NEXT_PUBLIC_N8N_REPLY_URL: http://localhost:5678/webhook/jarvis-reply
+    image: jarvis-frontend:latest
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "3000:3000"
+    # `docker compose up` reuses an image that already exists — editing the app and
+    # bringing the stack back up would otherwise keep serving the old bundle. Under
+    # `docker compose watch` this rebuilds the image and replaces the container
+    # whenever anything in ./nextjs-frontend changes. It is a rebuild rather than a
+    # sync because the image runs `next start` on a compiled standalone build with no
+    # dev server in it; for hot reload, run `npm run dev` on the host instead.
+    develop:
+      watch:
+        - action: rebuild
+          path: ./nextjs-frontend
+          ignore:
+            - node_modules/
+            - .next/
+            - .env.local
+            - tsconfig.tsbuildinfo
+
+  # --- n8n automation -------------------------------------------------------
+  # n8n keeps its workflows in its own Postgres, deliberately separate from the
+  # retrieval database above: different major version, different lifecycle.
+  n8n-postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${N8N_POSTGRES_USER:-n8n_admin}
+      POSTGRES_PASSWORD: ${N8N_POSTGRES_PASSWORD:-n8n_local_dev}
+      POSTGRES_DB: ${N8N_POSTGRES_DB:-n8n}
+      POSTGRES_NON_ROOT_USER: ${N8N_POSTGRES_NON_ROOT_USER:-n8n_user}
+      POSTGRES_NON_ROOT_PASSWORD: ${N8N_POSTGRES_NON_ROOT_PASSWORD:-n8n_local_dev}
+      # postgres:18 moved its default data dir. Pinning it keeps the volume
+      # mount stable across major versions.
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - n8n_db_storage:/var/lib/postgresql/data
+      # Runs only on an empty volume; a restored volume already has the user.
+      - ./n8n-init-data.sh:/docker-entrypoint-initdb.d/init-data.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ${N8N_POSTGRES_USER:-n8n_admin} -d ${N8N_POSTGRES_DB:-n8n}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: on a fresh machine this loads the workflows from ./n8n and the two
+  # local-only credentials, then exits. It runs BEFORE n8n starts so the webhooks
+  # are live on first boot. Re-runs are a no-op (marker file in the n8n volume).
+  n8n-import:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-stable}
+    restart: "no"
+    depends_on:
+      n8n-postgres:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${N8N_POSTGRES_NON_ROOT_USER:-n8n_user}
+      DB_POSTGRESDB_PASSWORD: ${N8N_POSTGRES_NON_ROOT_PASSWORD:-n8n_local_dev}
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./n8n:/seed:ro
+    entrypoint: ["/bin/sh", "/seed/seed.sh"]
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-stable}
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${N8N_POSTGRES_NON_ROOT_USER:-n8n_user}
+      DB_POSTGRESDB_PASSWORD: ${N8N_POSTGRES_NON_ROOT_PASSWORD:-n8n_local_dev}
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:-jarvis-local-runner-token}
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_storage:/home/node/.n8n
+    depends_on:
+      n8n-postgres:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+
+  n8n-runner:
+    image: n8nio/runners:${N8N_VERSION:-stable}
+    restart: unless-stopped
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:-jarvis-local-runner-token}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+    depends_on:
+      - n8n
 
 volumes:
   pgdata:
   ollama_data:
+  n8n_storage:
+  n8n_db_storage:

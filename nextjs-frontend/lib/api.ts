@@ -145,3 +145,66 @@ export function answerStreamUrl(question: string, opts: { topK?: number; documen
     if (opts.documentId) params.set("documentId", opts.documentId);
     return `${API_BASE_URL}/answer/stream?${params}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Calendar                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** `PERSONAL` entries are the planner and are editable; `HOLIDAY` rows are seeded
+ * reference data and the backend refuses writes against them. */
+export type EventKind = "PERSONAL" | "HOLIDAY";
+
+export type CalendarEvent = {
+    id: string;
+    /** `YYYY-MM-DD`, a plain calendar day with no timezone attached to it. */
+    date: string;
+    /** `HH:mm:ss`, or null for an all-day entry. Every holiday is all-day. */
+    startTime: string | null;
+    title: string;
+    notes: string | null;
+    kind: EventKind;
+    createdAt: string;
+};
+
+export type CalendarEventInput = {
+    date: string;
+    startTime?: string | null;
+    title: string;
+    notes?: string | null;
+};
+
+/** Everything between two days, inclusive — one month of the calendar grid per call. */
+export async function listCalendar(from: string, to: string): Promise<CalendarEvent[]> {
+    const params = new URLSearchParams({ from, to });
+    const response = await fetch(`${API_BASE_URL}/calendar?${params}`, { cache: "no-store" });
+    return unwrap<CalendarEvent[]>(response);
+}
+
+export async function createCalendarEvent(input: CalendarEventInput): Promise<CalendarEvent> {
+    const response = await fetch(`${API_BASE_URL}/calendar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+    });
+    return unwrap<CalendarEvent>(response);
+}
+
+export async function updateCalendarEvent(
+    id: string,
+    input: CalendarEventInput,
+): Promise<CalendarEvent> {
+    const response = await fetch(`${API_BASE_URL}/calendar/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+    });
+    return unwrap<CalendarEvent>(response);
+}
+
+export async function deleteCalendarEvent(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/calendar/${id}`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? `Delete failed with ${response.status}`);
+    }
+}

@@ -1,0 +1,492 @@
+{
+  "id": "gil5JXItoV0Ox4mV",
+  "name": "Jarvis Homepage Briefing",
+  "active": true,
+  "settings": {
+    "binaryMode": "separate",
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "be991654-3dc6-4afd-8630-b01ced8f6fe2",
+      "name": "Homepage Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        208,
+        16
+      ],
+      "webhookId": "2f0c1d6a-4b7e-4a3d-9c21-8ef0b5a7c134",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "jarvis-briefing",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "b3e99b24-40aa-4f93-b5b7-7f29aa60b9fc",
+      "name": "Get Weather",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        16
+      ],
+      "parameters": {
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=14.644&longitude=121.051&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&timezone=Asia%2FManila&forecast_days=1",
+        "options": {}
+      }
+    },
+    {
+      "id": "d771d56e-2958-43e3-906a-e394626e03e2",
+      "name": "Get Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        16
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "limit": 30,
+        "simple": true,
+        "filters": {
+          "q": "newer_than:1d"
+        },
+        "operation": "getAll"
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YtxHS2abmDDNLINe",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "7a1c5f28-6d3b-4e90-8f4a-2b9d0c6e1a75",
+      "name": "Get Documents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        832,
+        16
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "http://app:8080/api/v1/documents",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "6c4d2a19-7f83-4b05-9e26-1d8a0c5f3b74",
+      "name": "Get Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        936,
+        16
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "http://app:8080/api/v1/calendar/upcoming?days=7",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "1b6f9e30-2c47-4a58-9d81-4f0a7c3e5b92",
+      "name": "Pick Channels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        16
+      ],
+      "parameters": {
+        "jsCode": "// Fans out into one item per YouTube channel, so the HTTP Request node after this runs\n// once per feed. Atom feeds are public and need no API key, which is the whole reason the\n// watch tile works without another credential to keep alive.\n//\n// Edit this list to change what shows up on the homepage. A channel id is the `UC...`\n// string in https://www.youtube.com/channel/<id>; a wrong one simply yields no entries\n// rather than an error.\nconst CHANNELS = [\n  'UCsBjURrPoezykLs9EqgamOA', // Fireship\n  'UCbRP3c757lWg9M-U7TyEkXA', // Theo - t3.gg\n  'UCZgt6AzoyjslHTC9dz0UoTw', // ByteByteGo\n  'UCFbNIlppjAuEX4znoulh0Cw', // Web Dev Simplified\n  'UCLq8gNoee7oXM7MvTdjyQvA', // Vercel\n];\n\nreturn CHANNELS.map((channelId) => ({\n  json: { feedUrl: `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}` },\n}));\n"
+      }
+    },
+    {
+      "id": "e50d8b71-93a2-4c16-b7f4-6d2e819c0a34",
+      "name": "Get Video Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1248,
+        16
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "={{ $json.feedUrl }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "032f6b3c-655d-44b1-b9f0-5fb9e2be7d3d",
+      "name": "Build Briefing Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        16
+      ],
+      "parameters": {
+        "jsCode": "// Weather and email are pulled from their nodes by name rather than from this node's\r\n// input, because \"Get Documents\" now sits between Gmail and here.\r\nconst w = $('Get Weather').first().json;\r\nconst d = w.daily ?? {};\r\nconst c = w.current ?? {};\r\n\r\nconst CODES = {0:'clear',1:'mainly clear',2:'partly cloudy',3:'overcast',45:'fog',48:'fog',\r\n  51:'light drizzle',53:'drizzle',55:'heavy drizzle',61:'light rain',63:'rain',65:'heavy rain',\r\n  80:'rain showers',81:'rain showers',82:'heavy rain showers',95:'thunderstorm',96:'thunderstorm',99:'thunderstorm'};\r\n\r\nconst weather = [\r\n  `Condition: ${CODES[d.weather_code?.[0]] ?? 'unknown'}`,\r\n  `High ${d.temperature_2m_max?.[0]}C, low ${d.temperature_2m_min?.[0]}C`,\r\n  `Right now ${c.temperature_2m}C, feels like ${c.apparent_temperature}C, humidity ${c.relative_humidity_2m}%`,\r\n  `Chance of rain today: ${d.precipitation_probability_max?.[0]}%`,\r\n  `Sunrise ${d.sunrise?.[0]?.slice(11)}, sunset ${d.sunset?.[0]?.slice(11)}`,\r\n].join('\\n');\r\n\r\n// Marketing mail pads subjects and snippets with invisible characters. Strip them,\r\n// otherwise they eat a large share of a small model's context.\r\nconst clean = (s) => String(s ?? '')\r\n  .replace(/[\\u034f\\u200b-\\u200d\\ufeff\\u00ad]/g, '')\r\n  .replace(/\\s+/g, ' ')\r\n  .trim();\r\n\r\n// Shared by \"Build Briefing Input\" and \"Shape Response\", inlined into both by build.mjs's\n// `@include`. The two Code nodes run in separate sandboxes but are bound by a contract:\n// the agent names an action item by the email's position in the prompt list, and Shape\n// Response resolves that number back to a real message by index. Filtering in one node\n// only would shift the numbering and reply to the wrong person, so the filter lives here\n// once and both sides get the identical copy.\n\n// Automated senders that discard whatever is sent back. Replying is a dead letter, so\n// they never earn a slot on the \"Needs a reply\" card -- and dropping them before the\n// prompt is built keeps a 3B model's small context on mail that can actually be answered.\nconst NO_REPLY =\n  /(^|[^a-z0-9])(no[._-]?reply|do[._-]?not[._-]?reply|donotreply|mailer[-_]?daemon|postmaster|bounces?)([^a-z0-9]|$)/i;\n\n// `Genrey <no-reply@example.com>` -> `no-reply`. Matching only the local part keeps a\n// domain like `noreply.example.com` from disqualifying a human sender there.\nconst localPart = (from) => {\n  const angled = /<([^>]*)>/.exec(String(from ?? ''));\n  const addr = (angled ? angled[1] : String(from ?? '')).trim();\n  return addr.split('@')[0] ?? '';\n};\n\nconst senderOf = (e) => e.From ?? e.from ?? e.headers?.from;\n\n// \"Always Output Data\" on the Gmail node can emit one empty item; drop that too.\nconst repliableEmails = () => $('Get Emails').all()\n  .map(i => i.json)\n  .filter(e => e && (e.id || e.Subject || e.subject || e.snippet))\n  .filter(e => !NO_REPLY.test(localPart(senderOf(e))));\r\n\r\n// No-reply senders are dropped here rather than in the prompt, so the numbering the agent\r\n// sees already matches what Shape Response resolves against.\r\n//\r\n// The cap keeps a busy inbox from crowding out the instructions in the model's 8192-token\r\n// window. It MUST stay a prefix of repliableEmails(): Shape Response resolves email number\r\n// N against the uncapped list, so anything but `slice(0, N)` shifts the mapping and replies\r\n// to the wrong person.\r\nconst PROMPT_LIMIT = 20;\r\nconst raw = repliableEmails().slice(0, PROMPT_LIMIT);\r\n\r\nconst emails = raw.map((e, n) => {\r\n  const from = clean(e.From ?? e.from ?? e.headers?.from) || '(unknown sender)';\r\n  const subject = clean(e.Subject ?? e.subject ?? e.headers?.subject) || '(no subject)';\r\n  const preview = clean(e.snippet).slice(0, 140);\r\n  return `${n + 1}. From: ${from}\\n   Subject: ${subject}\\n   Preview: ${preview}`;\r\n});\r\n\r\nconst emailBlock = emails.length\r\n  ? emails.join('\\n')\r\n  : 'No new emails in the last 24 hours.';\r\n\r\n// The calendar: the user's planner entries and the Philippine holidays they sit among, from\r\n// the backend's /calendar/upcoming. Pulled by node name because Pick Channels and Get Video\r\n// Feed sit between it and here. The node is allowed to fail (the backend may be restarting),\r\n// in which case there is simply nothing to say about the week.\r\nconst calendarRows = (() => {\r\n  try {\r\n    return $('Get Calendar').all().map((item) => item.json).filter((row) => row && row.title);\r\n  } catch {\r\n    return [];\r\n  }\r\n})();\r\n\r\nconst calendar = calendarRows\r\n  .map((row) => {\r\n    const when = row.startTime ? `${row.date} ${String(row.startTime).slice(0, 5)}` : `${row.date} (all day)`;\r\n    const what = row.kind === 'HOLIDAY' ? `${row.title} — holiday` : row.title;\r\n    return `- ${when}: ${what}${row.notes ? ` (${row.notes})` : ''}`;\r\n  })\r\n  .join('\\n');\r\n\r\nconst calendarBlock = calendar || 'Nothing on the calendar for the next seven days.';\r\n\r\n// The date grounds the agent's follow-up question: its Postgres chat memory holds the\r\n// briefings it wrote on earlier days, and without a date it cannot tell which was \"yesterday\".\r\nconst today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });\r\n\r\nreturn [{ json: { briefing_input:\r\n  `TODAY IS ${today}\\n\\nTODAY'S WEATHER (Quezon City)\\n${weather}\\n\\nTHE WEEK AHEAD (calendar and Philippine holidays)\\n${calendarBlock}\\n\\nRECENT EMAILS (${emails.length})\\n${emailBlock}` } }];\r\n"
+      }
+    },
+    {
+      "id": "05bb60a2-0592-4cc0-a7da-63df1a46ff9f",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1664,
+        16
+      ],
+      "parameters": {
+        "text": "=You are Genrey's Jarvis, a virtual assistant that helps him start his day.\n\nHere is today's information:\n\n{{ $json.briefing_input }}\n\nUsing ONLY the information above, produce Genrey's morning briefing.\n- greeting: one short friendly line. If today is a holiday or has something on the calendar, say so here.\n- weather: copy the numbers exactly from the data above, and add one sentence of advice.\n- email_summary: one or two sentences on what is sitting in his inbox.\n- action_items: up to five emails that genuinely need a reply from him today, most important first. The list has already had automated no-reply senders removed, so every email in it can be replied to. Identify each one by its number in the RECENT EMAILS list, not by its subject. Empty array if none.\n- tasks: exactly three concrete tasks suited to today's weather AND to what is already on his calendar. Do not propose something that collides with an entry, and if today is a holiday or already has entries on it, work around them.\n- followup_question: your memory holds the briefings you wrote on earlier days. If you gave him tasks on an earlier day, ask by name how those specific tasks went. Otherwise an empty string.",
+        "options": {
+          "enableStreaming": false
+        },
+        "promptType": "define",
+        "hasOutputParser": false
+      }
+    },
+    {
+      "id": "f0327c96-26ac-402e-8d86-968546b56d40",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        288
+      ],
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {
+          "numCtx": 8192,
+          "format": {
+            "type": "object",
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "type": "object",
+                "properties": {
+                  "greeting": {
+                    "type": "string",
+                    "description": "One short friendly greeting line for Genrey."
+                  },
+                  "weather": {
+                    "type": "object",
+                    "properties": {
+                      "condition": {
+                        "type": "string",
+                        "description": "e.g. thunderstorm, light rain, clear"
+                      },
+                      "high_c": {
+                        "type": "number"
+                      },
+                      "low_c": {
+                        "type": "number"
+                      },
+                      "rain_chance_percent": {
+                        "type": "number"
+                      },
+                      "advice": {
+                        "type": "string",
+                        "description": "One sentence on what the weather means for his plans."
+                      }
+                    },
+                    "required": [
+                      "condition",
+                      "high_c",
+                      "low_c",
+                      "rain_chance_percent",
+                      "advice"
+                    ]
+                  },
+                  "email_summary": {
+                    "type": "string",
+                    "description": "One or two sentences summarising the inbox."
+                  },
+                  "action_items": {
+                    "type": "array",
+                    "description": "Up to five emails that genuinely need action today. Empty array if none.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "email_number": {
+                          "type": "number",
+                          "description": "The number of the email in the RECENT EMAILS list above."
+                        },
+                        "why": {
+                          "type": "string",
+                          "description": "Why it needs action today."
+                        }
+                      },
+                      "required": [
+                        "email_number",
+                        "why"
+                      ]
+                    }
+                  },
+                  "tasks": {
+                    "type": "array",
+                    "description": "Exactly three concrete tasks for today, suited to the weather.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "task": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "task",
+                        "reason"
+                      ]
+                    }
+                  },
+                  "followup_question": {
+                    "type": "string",
+                    "description": "A question about yesterday's tasks, or an empty string if there were none."
+                  }
+                },
+                "required": [
+                  "greeting",
+                  "weather",
+                  "email_summary",
+                  "action_items",
+                  "tasks",
+                  "followup_question"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "id": "pzpQke7yc1q3hNGz",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "id": "3ec59482-e826-4dea-a87e-d94254e14da6",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        1764,
+        288
+      ],
+      "parameters": {
+        "sessionKey": "jarvis-daily",
+        "sessionIdType": "customKey",
+        "contextWindowLength": 20
+      },
+      "credentials": {
+        "postgres": {
+          "id": "5XBq8dDbpRxVOz24",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "c4e8a903-51fd-4b62-9a0e-7d3c8b1f6042",
+      "name": "Shape Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        16
+      ],
+      "parameters": {
+        "jsCode": "// The webhook's response body -- this is the contract the homepage renders against\n// (see nextjs-frontend/lib/briefing.ts).\n//\n// Anything the model should not be paraphrasing is copied straight from the source\n// nodes: llama3.2:3b reliably invents temperatures, so only prose comes from the agent.\n\n// The agent has no output parser, so its answer arrives as the raw JSON string the\n// Ollama grammar produced. A model that still manages to emit something unparseable\n// must not take the whole briefing down -- the weather, inbox count and documents below\n// are all real data, and a briefing missing only its prose is still worth showing.\nlet b = {};\ntry {\n  const answer = $json.output ?? $json.text ?? $json;\n  b = (typeof answer === 'string' ? JSON.parse(answer) : answer) ?? {};\n  // The grammar wraps the briefing in `output`; unwrap it if it is still there.\n  if (b.output && typeof b.output === 'object') b = b.output;\n} catch {\n  b = {};\n}\n\nconst w = $('Get Weather').first().json;\nconst d = w.daily ?? {};\nconst c = w.current ?? {};\n\nconst CODES = {0:'clear',1:'mainly clear',2:'partly cloudy',3:'overcast',45:'fog',48:'fog',\n  51:'light drizzle',53:'drizzle',55:'heavy drizzle',61:'light rain',63:'rain',65:'heavy rain',\n  80:'rain showers',81:'rain showers',82:'heavy rain showers',95:'thunderstorm',96:'thunderstorm',99:'thunderstorm'};\n\nconst str = (v) => (typeof v === 'string' ? v.trim() : '');\nconst arr = (v) => (Array.isArray(v) ? v : []);\nconst num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);\n\nconst clean = (s) => String(s ?? '')\n  .replace(/[͏​-‍﻿­]/g, '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// Shared by \"Build Briefing Input\" and \"Shape Response\", inlined into both by build.mjs's\n// `@include`. The two Code nodes run in separate sandboxes but are bound by a contract:\n// the agent names an action item by the email's position in the prompt list, and Shape\n// Response resolves that number back to a real message by index. Filtering in one node\n// only would shift the numbering and reply to the wrong person, so the filter lives here\n// once and both sides get the identical copy.\n\n// Automated senders that discard whatever is sent back. Replying is a dead letter, so\n// they never earn a slot on the \"Needs a reply\" card -- and dropping them before the\n// prompt is built keeps a 3B model's small context on mail that can actually be answered.\nconst NO_REPLY =\n  /(^|[^a-z0-9])(no[._-]?reply|do[._-]?not[._-]?reply|donotreply|mailer[-_]?daemon|postmaster|bounces?)([^a-z0-9]|$)/i;\n\n// `Genrey <no-reply@example.com>` -> `no-reply`. Matching only the local part keeps a\n// domain like `noreply.example.com` from disqualifying a human sender there.\nconst localPart = (from) => {\n  const angled = /<([^>]*)>/.exec(String(from ?? ''));\n  const addr = (angled ? angled[1] : String(from ?? '')).trim();\n  return addr.split('@')[0] ?? '';\n};\n\nconst senderOf = (e) => e.From ?? e.from ?? e.headers?.from;\n\n// \"Always Output Data\" on the Gmail node can emit one empty item; drop that too.\nconst repliableEmails = () => $('Get Emails').all()\n  .map(i => i.json)\n  .filter(e => e && (e.id || e.Subject || e.subject || e.snippet))\n  .filter(e => !NO_REPLY.test(localPart(senderOf(e))));\n\n// The identical filter Build Briefing Input applied, so email number N in the prompt is\n// emails[N - 1] here. That is what lets the model refer to an email by number and still\n// produce an action item the homepage can actually reply to.\nconst emails = repliableEmails();\n\n// The card shows this many. Every one of them is repliable, so a slot spent on an\n// automated sender is a slot wasted -- hence the filter above rather than a bigger cap.\nconst CARD_SIZE = 5;\n\nconst toActionItem = (e, why) => ({\n  message_id: str(e.id),\n  thread_id: str(e.threadId),\n  subject: clean(e.Subject ?? e.subject ?? e.headers?.subject) || '(no subject)',\n  from: clean(e.From ?? e.from ?? e.headers?.from) || '(unknown sender)',\n  snippet: clean(e.snippet).slice(0, 200),\n  why,\n});\n\n// Action items are resolved back to the real message rather than trusted as the model\n// wrote them: a 3B model garbles long subject lines, and a reply needs a genuine Gmail\n// message id. An out-of-range or repeated number simply drops the item.\nconst flagged = arr(b.action_items)\n  .map(a => ({ n: Number(a?.email_number), why: str(a?.why) }))\n  .filter(a => Number.isInteger(a.n) && a.n >= 1 && a.n <= emails.length)\n  .filter((a, i, all) => all.findIndex(x => x.n === a.n) === i)\n  .slice(0, CARD_SIZE);\n\nconst flaggedIndexes = new Set(flagged.map(a => a.n));\n\n// The agent decides what is urgent, but it routinely flags one or two and the card then\n// looks empty next to a full inbox. The remaining slots are filled with the newest\n// repliable mail it did not pick, in Gmail's own order. Those carry no `why` -- the\n// homepage renders that line only when there is one -- so an agent-flagged email still\n// reads as the one that needs attention.\nconst backfill = emails\n  .map((e, i) => ({ e, n: i + 1 }))\n  .filter(({ n }) => !flaggedIndexes.has(n))\n  .slice(0, Math.max(0, CARD_SIZE - flagged.length))\n  .map(({ e }) => toActionItem(e, ''));\n\nconst actionItems = flagged\n  .map(({ n, why }) => toActionItem(emails[n - 1], why))\n  .concat(backfill)\n  .filter(a => a.message_id);\n\n// \"Get Documents\" continues on error, so a backend that is down arrives as an item\n// with no id rather than taking the whole briefing with it.\nconst library = $('Get Documents').all()\n  .map(i => i.json)\n  .filter(x => x && x.id);\n\n// Fisher-Yates, used for both the library and the videos: every refresh surfaces a\n// different slice rather than the same rows again.\nconst shuffle = (items) => {\n  const out = items.slice();\n  for (let i = out.length - 1; i > 0; i--) {\n    const j = Math.floor(Math.random() * (i + 1));\n    [out[i], out[j]] = [out[j], out[i]];\n  }\n  return out;\n};\n\n// YouTube Atom feeds, one item per channel. Parsed by hand because the payload is small\n// and predictable, and pulling an XML library into the Code node sandbox is not.\nconst unescapeXml = (s) => String(s ?? '')\n  .replace(/&lt;/g, '<').replace(/&gt;/g, '>')\n  .replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\")\n  .replace(/&amp;/g, '&');\n\nconst videos = [];\nfor (const item of $('Get Video Feed').all()) {\n  const xml = typeof item.json?.data === 'string' ? item.json.data : '';\n  // Everything before the first <entry> is the feed header, hence slice(1).\n  for (const entry of xml.split('<entry>').slice(1)) {\n    const id = /<yt:videoId>([^<]+)</.exec(entry)?.[1];\n    if (!id) continue;\n    videos.push({\n      id,\n      title: unescapeXml(/<title>([^<]*)</.exec(entry)?.[1]),\n      channel: unescapeXml(/<name>([^<]*)</.exec(entry)?.[1]),\n      published: /<published>([^<]*)</.exec(entry)?.[1] ?? null,\n      url: `https://www.youtube.com/watch?v=${id}`,\n    });\n  }\n}\n\nreturn [{ json: {\n  generated_at: new Date().toISOString(),\n  greeting: str(b.greeting) || 'Good morning, Genrey.',\n  weather: {\n    location: 'Quezon City',\n    condition: CODES[d.weather_code?.[0]] ?? (str(b.weather?.condition) || 'unknown'),\n    high_c: num(d.temperature_2m_max?.[0]),\n    low_c: num(d.temperature_2m_min?.[0]),\n    current_c: num(c.temperature_2m),\n    feels_like_c: num(c.apparent_temperature),\n    humidity_percent: num(c.relative_humidity_2m),\n    rain_chance_percent: num(d.precipitation_probability_max?.[0]),\n    sunrise: d.sunrise?.[0] ?? null,\n    sunset: d.sunset?.[0] ?? null,\n    advice: str(b.weather?.advice),\n  },\n  email_summary: str(b.email_summary),\n  email_count: emails.length,\n  action_items: actionItems,\n  tasks: arr(b.tasks).slice(0, 3).map(t => ({\n    task: str(t?.task),\n    reason: str(t?.reason),\n  })).filter(t => t.task),\n  followup_question: str(b.followup_question),\n  documents: shuffle(library).slice(0, 3).map(x => ({\n    id: x.id,\n    title: str(x.title) || 'Untitled',\n    contentType: str(x.contentType),\n    ingestedAt: x.ingestedAt ?? null,\n  })),\n  document_count: library.length,\n  videos: shuffle(videos).slice(0, 4),\n} }];\n"
+      }
+    },
+    {
+      "id": "9d2b7e14-08ac-4f35-b6d8-3a5c9e027f81",
+      "name": "Respond to Homepage",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2080,
+        16
+      ],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "http://localhost:3000"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Homepage Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Weather",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weather": {
+      "main": [
+        [
+          {
+            "node": "Get Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Emails": {
+      "main": [
+        [
+          {
+            "node": "Get Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Documents": {
+      "main": [
+        [
+          {
+            "node": "Get Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar": {
+      "main": [
+        [
+          {
+            "node": "Pick Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Channels": {
+      "main": [
+        [
+          {
+            "node": "Get Video Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Video Feed": {
+      "main": [
+        [
+          {
+            "node": "Build Briefing Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Briefing Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Shape Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

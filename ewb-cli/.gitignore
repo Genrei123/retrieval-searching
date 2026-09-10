@@ -1,7 +1,0 @@
-node_modules/
-dist/
-*.tgz
-
-# Never commit this: `vsts-npm-auth` and manual PAT setup both write a base64
-# access token into it. Commit .npmrc.example instead.
-.npmrc

@@ -1,6 +1,7 @@
 package com.example.retrieval_search.web;
 
 import com.example.retrieval_search.generation.GenerationService;
+import com.example.retrieval_search.generation.GenerationException;
 import com.example.retrieval_search.search.SearchHit;
 import com.example.retrieval_search.web.dto.SearchResultDto;
 import org.slf4j.Logger;
@@ -31,11 +32,20 @@ public class AnswerStreamRunner {
     @Async
     public void stream(SseEmitter emitter, String question, int topK, UUID documentId) {
         try {
-            generationService.streamAnswer(question, topK, documentId,
+            boolean cached = generationService.streamAnswer(question, topK, documentId,
                     sources -> send(emitter, "sources", toDtos(sources), MediaType.APPLICATION_JSON),
                     token -> send(emitter, "token", new TokenPayload(token), MediaType.APPLICATION_JSON));
+            send(emitter, "cache", new CachePayload(cached), MediaType.APPLICATION_JSON);
             send(emitter, "done", "", MediaType.TEXT_PLAIN);
             emitter.complete();
+        } catch (GenerationException e) {
+            log.warn("Answer generation failed: {}", e.getMessage());
+            try {
+                send(emitter, "generation-error", new ErrorPayload(e.getMessage()), MediaType.APPLICATION_JSON);
+                emitter.complete();
+            } catch (RuntimeException disconnected) {
+                emitter.completeWithError(disconnected);
+            }
         } catch (Exception e) {
             log.warn("Answer stream failed", e);
             emitter.completeWithError(e);
@@ -60,6 +70,9 @@ public class AnswerStreamRunner {
      * that converter entirely, since it only handles String/CharSequence. */
     private record TokenPayload(String token) {
     }
+
+    private record CachePayload(boolean cached) {}
+    private record ErrorPayload(String message) {}
 
     private void send(SseEmitter emitter, String eventName, Object data, MediaType mediaType) {
         try {

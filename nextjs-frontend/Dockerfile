@@ -16,11 +16,6 @@ COPY . .
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 
-# Same story for the homepage's n8n webhook: the browser calls it directly.
-ARG NEXT_PUBLIC_N8N_BRIEFING_URL=http://localhost:5678/webhook/jarvis-briefing
-ENV NEXT_PUBLIC_N8N_BRIEFING_URL=$NEXT_PUBLIC_N8N_BRIEFING_URL
-ARG NEXT_PUBLIC_N8N_REPLY_URL=http://localhost:5678/webhook/jarvis-reply
-ENV NEXT_PUBLIC_N8N_REPLY_URL=$NEXT_PUBLIC_N8N_REPLY_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

@@ -13,7 +13,18 @@ final class ChunkPostProcessor {
         List<String> chunks = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         int currentWords = 0;
+        List<String> boundedUnits = new ArrayList<>();
         for (String unit : units) {
+            if (wordCount(unit) <= hardMaxWords) boundedUnits.add(unit);
+            else {
+                String[] words = unit.trim().split("\\s+");
+                for (int start = 0; start < words.length; start += targetWords) {
+                    boundedUnits.add(String.join(" ", java.util.Arrays.copyOfRange(words, start,
+                            Math.min(words.length, start + targetWords))));
+                }
+            }
+        }
+        for (String unit : boundedUnits) {
             String trimmedUnit = unit.trim();
             if (trimmedUnit.isEmpty()) {
                 continue;
@@ -50,7 +61,7 @@ final class ChunkPostProcessor {
                 i++;
                 continue;
             }
-            if (i + 1 < result.size()) {
+            if (i + 1 < result.size() && draft.wordCount() + result.get(i + 1).wordCount() <= ChunkingRules.HARD_MAX_WORDS) {
                 SectionDraft next = result.get(i + 1);
                 SectionDraft merged = new SectionDraft(
                         next.headingPath(),
@@ -58,7 +69,7 @@ final class ChunkPostProcessor {
                         next.anchor());
                 result.set(i + 1, merged);
                 result.remove(i);
-            } else {
+            } else if (i > 0 && draft.wordCount() + result.get(i - 1).wordCount() <= ChunkingRules.HARD_MAX_WORDS) {
                 SectionDraft prev = result.get(i - 1);
                 SectionDraft merged = new SectionDraft(
                         prev.headingPath(),
@@ -66,6 +77,8 @@ final class ChunkPostProcessor {
                         prev.anchor());
                 result.set(i - 1, merged);
                 result.remove(i);
+            } else {
+                i++;
             }
         }
         return result;

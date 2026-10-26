@@ -10,7 +10,8 @@ import java.util.UUID;
 
 /**
  * Ranking per spec §6: ts_rank_cd base score, heading exact-match x1.5, synonym-only x0.6,
- * 0.01 score floor, max 3 sections per document. ts_headline (§7) runs only on the already
+ * 0.01 score floor, max 3 sections per document in global search. Scoped search has no document
+ * cap. ts_headline (§7) runs only on the already
  * paginated `paged` CTE, never on the full candidate set.
  */
 @Repository
@@ -50,7 +51,7 @@ public class SearchQueryRepository {
                 candidates AS (
                     SELECT s.id, s.document_id, s.heading_path, s.body, s.anchor,
                            ts_rank_cd(s.search_vector, q.full_query, 32)
-                             * CASE WHEN s.heading_path ILIKE ('%%' || :rawQuery || '%%') THEN 1.5 ELSE 1 END
+                             * CASE WHEN strpos(lower(coalesce(s.heading_path, '')), lower(:rawQuery)) > 0 THEN 1.5 ELSE 1 END
                              * CASE WHEN NOT (s.search_vector @@ q.base_query) THEN 0.6 ELSE 1 END AS score,
                            CASE WHEN s.search_vector @@ q.base_query THEN 'EXACT' ELSE 'SYNONYM' END AS match_type
                     FROM document_sections s, q
@@ -58,14 +59,14 @@ public class SearchQueryRepository {
                     %s
                 ),
                 ranked AS (
-                    SELECT *, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY score DESC) AS doc_rank
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY score DESC, id) AS doc_rank
                     FROM candidates
                     WHERE score >= 0.01
                 ),
                 filtered AS (
                     SELECT *, COUNT(*) OVER() AS total_count
                     FROM ranked
-                    WHERE doc_rank <= 3
+                    WHERE doc_rank <= :perDocumentLimit
                 ),
                 paged AS (
                     SELECT * FROM filtered ORDER BY score DESC, id LIMIT :size OFFSET :offset
@@ -81,7 +82,8 @@ public class SearchQueryRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("rawQuery", rawQuery)
                 .addValue("size", size)
-                .addValue("offset", page * size)
+                .addValue("offset", (long) page * size)
+                .addValue("perDocumentLimit", documentId == null ? 3 : Integer.MAX_VALUE)
                 .addValue("snippetOpts", SNIPPET_OPTS);
         if (hasExpansions) {
             params.addValue("expansionExpr", String.join(" | ", expansions));

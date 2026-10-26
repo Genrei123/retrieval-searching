@@ -1,131 +1,53 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { getJobStatus, uploadDocument, type JobStatus } from "@/lib/api";
+import { useDocuments } from "@/components/documents-store";
+import { ChunkingProgress } from "@/components/chunking-progress";
 
-type UploadState = {
-    phase: "idle" | "uploading" | "polling" | "done" | "failed";
-    message: string | null;
-};
-
-const POLL_INTERVAL_MS = 1000;
-
-export function DocumentUpload({ onIngested }: { onIngested: () => void }) {
-    const [title, setTitle] = useState("");
-    const [file, setFile] = useState<File | null>(null);
-    const [state, setState] = useState<UploadState>({ phase: "idle", message: null });
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    function pollJob(jobId: string) {
-        setState({ phase: "polling", message: "Ingesting…" });
-
-        const interval = setInterval(async () => {
-            try {
-                const job = await getJobStatus(jobId);
-                if (isTerminal(job.status)) {
-                    clearInterval(interval);
-                    if (job.status === "DONE" || job.status === "SKIPPED_UNCHANGED") {
-                        setState({ phase: "done", message: job.message ?? "Ingestion complete." });
-                        onIngested();
-                    } else {
-                        setState({ phase: "failed", message: job.message ?? "Ingestion failed." });
-                    }
-                }
-            } catch (e) {
-                clearInterval(interval);
-                setState({
-                    phase: "failed",
-                    message: e instanceof Error ? e.message : "Lost track of ingestion job.",
-                });
-            }
-        }, POLL_INTERVAL_MS);
-    }
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!file || !title.trim()) return;
-
-        setState({ phase: "uploading", message: null });
-        try {
-            const { jobId } = await uploadDocument(file, title.trim());
-            pollJob(jobId);
-        } catch (e) {
-            setState({ phase: "failed", message: e instanceof Error ? e.message : "Upload failed" });
-        }
-    }
-
-    function reset() {
-        setTitle("");
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        setState({ phase: "idle", message: null });
-    }
-
-    const busy = state.phase === "uploading" || state.phase === "polling";
-
+export function DocumentUpload() {
+    const { draft, setDraft, busy, phase, error, job, content, formKey, edit, submit, loadPreview } = useDocuments();
+    const field = "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500 disabled:opacity-50";
     return (
-        <form
-            onSubmit={handleSubmit}
-            className="flex flex-col gap-3 rounded-2xl border border-stone-200 p-5"
-        >
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-                    Title
-                </label>
-                <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Spring Framework Reference"
-                    disabled={busy}
-                    className="rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500 disabled:opacity-50"
-                />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-                    File (PDF, Markdown, or HTML)
-                </label>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.md,.markdown,.html,.htm"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    disabled={busy}
-                    className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium disabled:opacity-50"
-                />
-            </div>
-
-            <div className="flex items-center gap-3">
-                <button
-                    type="submit"
-                    disabled={busy || !file || !title.trim()}
-                    className="rounded-lg bg-stone-950 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    {busy ? "Uploading…" : "Upload"}
-                </button>
-                {state.phase === "done" && (
-                    <button
-                        type="button"
-                        onClick={reset}
-                        className="text-sm text-stone-500 underline underline-offset-2 hover:text-stone-800"
-                    >
-                        Upload another
+        <section id="document-editor" className="scroll-mt-6 space-y-5">
+            <form onSubmit={e => { e.preventDefault(); void submit(); }} className="rounded-2xl border border-stone-200 p-5 sm:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-medium">{draft.id ? "Edit document" : "Upload a document"}</h2>
+                    {(draft.id || phase === "done") && <button type="button" disabled={busy} onClick={() => edit()}
+                        className="text-sm text-stone-500 underline underline-offset-4 disabled:opacity-40">{draft.id ? "Cancel edit" : "Upload another"}</button>}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1.5 text-sm sm:col-span-2"><span>Title</span>
+                        <input required maxLength={200} value={draft.title} disabled={busy} className={field}
+                            placeholder="Dataset or document title" onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} />
+                    </label>
+                    <label className="space-y-1.5 text-sm"><span>Source / reference (optional)</span>
+                        <input value={draft.sourceUri} disabled={busy} maxLength={2000} className={field}
+                            placeholder="Where this document came from" onChange={e => setDraft(d => ({ ...d, sourceUri: e.target.value }))} />
+                    </label>
+                    <label className="space-y-1.5 text-sm"><span>Version</span>
+                        <input required maxLength={50} value={draft.version} disabled={busy} className={field}
+                            onChange={e => setDraft(d => ({ ...d, version: e.target.value }))} />
+                    </label>
+                    <label className="space-y-2 text-sm sm:col-span-2"><span>{draft.id ? "Replace file (optional)" : "File"}</span>
+                        <input key={formKey} type="file" accept=".pdf,.md,.markdown,.html,.htm" disabled={busy}
+                            onChange={e => setDraft(d => ({ ...d, file: e.target.files?.[0] ?? null }))}
+                            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:text-sm disabled:opacity-50" />
+                        <p className="text-xs text-stone-500">PDF, Markdown, or HTML · Up to 25 MB. {draft.id && "Leave the file empty to keep the existing content and chunks."}</p>
+                        {draft.file && <p className="text-xs text-stone-600">Selected: {draft.file.name} ({(draft.file.size / 1024).toFixed(1)} KB)</p>}
+                    </label>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <button disabled={busy || !draft.title.trim() || !draft.version.trim() || (!draft.id && !draft.file)}
+                        className="rounded-lg bg-stone-950 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+                        {phase === "uploading" ? "Transferring file…" : busy ? "Processing…" : draft.id ? "Save changes" : "Upload & inspect chunks"}
                     </button>
-                )}
-                {state.message && (
-                    <span
-                        className={`text-sm ${
-                            state.phase === "failed" ? "text-red-600" : "text-stone-500"
-                        }`}
-                    >
-                        {state.message}
-                    </span>
-                )}
-            </div>
-        </form>
+                    {phase === "done" && <span role="status" className="text-sm text-emerald-700">{job?.message ?? "Document saved."}</span>}
+                    {busy && <span role="status" className="text-xs text-stone-500">You can switch tabs; processing will continue.</span>}
+                </div>
+                {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
+                {phase === "done" && !content && job?.documentId && <button type="button" onClick={() => void loadPreview(job.documentId!)}
+                    className="mt-2 text-sm underline">Load chunk preview</button>}
+            </form>
+            {phase !== "idle" && <ChunkingProgress key={job?.jobId ?? "transferring"} phase={phase} job={job} content={content} />}
+        </section>
     );
-}
-
-function isTerminal(status: JobStatus): boolean {
-    return status === "DONE" || status === "FAILED" || status === "SKIPPED_UNCHANGED";
 }

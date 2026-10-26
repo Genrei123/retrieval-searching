@@ -9,7 +9,7 @@ public class MarkdownTextExtractor implements TextExtractor {
 
     @Override
     public boolean supports(String contentType) {
-        return "markdown".equalsIgnoreCase(contentType) || "html".equalsIgnoreCase(contentType);
+        return "markdown".equalsIgnoreCase(contentType);
     }
 
     @Override

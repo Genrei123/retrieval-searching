@@ -2,6 +2,16 @@ package com.example.retrieval_search.search;
 
 import com.example.retrieval_search.domain.MatchType;
 import com.example.retrieval_search.ingestion.IngestionService;
+import com.example.retrieval_search.repository.DocumentRepository;
+import com.example.retrieval_search.repository.DocumentSectionRepository;
+import com.example.retrieval_search.repository.DocumentFileRepository;
+import com.example.retrieval_search.generation.GenerationService;
+import com.example.retrieval_search.generation.OpenAiClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.web.server.ResponseStatusException;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +27,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
 /**
  * Runs against a real, disposable PostgreSQL container (spec §9): tsvector, ts_rank_cd and
@@ -43,6 +56,61 @@ class SearchIntegrationTest {
 
     @Autowired
     private IngestionService ingestionService;
+
+    @Autowired private DocumentRepository documents;
+    @MockitoSpyBean private DocumentSectionRepository sections;
+    @Autowired private DocumentFileRepository files;
+    @Autowired private GenerationService generation;
+    @MockitoBean private OpenAiClient model;
+
+    @Test
+    void documentCrudReindexesAndInvalidatesAnswerMemory() {
+        String title = "CRUD " + UUID.randomUUID();
+        byte[] initial = ("# Galaxy\n" + "Galaxy caching stores reusable data. ".repeat(30)).getBytes(StandardCharsets.UTF_8);
+        UUID id = ingestionService.ingest(title, null, "markdown", "1", "initial.md", initial).documentId();
+        when(model.generate(anyString())).thenReturn("First answer", "Renamed answer", "Replacement answer");
+        assertThat(generation.answerQuestion("caching", 8, id).text()).isEqualTo("First answer");
+        assertThat(generation.answerQuestion("caching", 8, id).text()).isEqualTo("First answer");
+        var initialSections = sections.findByDocumentId(id);
+
+        ingestionService.update(id, title + " renamed", "dataset-reference", "2", null, null, null, ignored -> {});
+        assertThat(documents.findById(id).orElseThrow().title()).isEqualTo(title + " renamed");
+        assertThat(sections.findByDocumentId(id)).isEqualTo(initialSections);
+        assertThat(files.findByDocumentId(id).orElseThrow().content()).isEqualTo(initial);
+        assertThat(generation.answerQuestion("caching", 8, id).text()).isEqualTo("Renamed answer");
+
+        byte[] replacement = ("# Planet\n" + "Planet caching refreshes saved data. ".repeat(30)).getBytes(StandardCharsets.UTF_8);
+        ingestionService.update(id, title + " renamed", null, "3", "markdown", "replacement.md", replacement, ignored -> {});
+        assertThat(searchService.search("galaxy", 0, 10, id).hits()).isEmpty();
+        assertThat(searchService.search("planet", 0, 10, id).hits()).isNotEmpty();
+        assertThat(files.findByDocumentId(id).orElseThrow().content()).isEqualTo(replacement);
+        assertThat(generation.answerQuestion("caching", 8, id).text()).isEqualTo("Replacement answer");
+        verify(model, times(3)).generate(anyString());
+
+        assertThat(documents.deleteById(id)).isTrue();
+        assertThat(sections.findByDocumentId(id)).isEmpty();
+        assertThat(files.findByDocumentId(id)).isEmpty();
+        assertThatThrownBy(() -> generation.answerQuestion("caching", 8, id)).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void failureAfterDeletingOldSectionsRollsBackTheEntireReplacement() {
+        String title = "Rollback " + UUID.randomUUID();
+        byte[] initial = ("# Stable\n" + "Original searchable data. ".repeat(30)).getBytes(StandardCharsets.UTF_8);
+        UUID id = ingestionService.ingest(title, null, "markdown", "1", "initial.md", initial).documentId();
+        var previous = sections.findByDocumentId(id);
+        doThrow(new IllegalStateException("Test insert failure")).when(sections).insertAll(anyList());
+        try {
+            assertThatThrownBy(() -> ingestionService.update(id, title, null, "2", "markdown", "replacement.md",
+                    "Replacement data".getBytes(StandardCharsets.UTF_8), ignored -> {})).isInstanceOf(IllegalStateException.class);
+        } finally {
+            doCallRealMethod().when(sections).insertAll(anyList());
+        }
+        assertThat(sections.findByDocumentId(id)).isEqualTo(previous);
+        assertThat(documents.findById(id).orElseThrow().version()).isEqualTo("1");
+        assertThat(files.findByDocumentId(id).orElseThrow().content()).isEqualTo(initial);
+        documents.deleteById(id);
+    }
 
     /** Ingestion is checksum-idempotent, so re-running this between tests is a no-op. */
     @BeforeEach
@@ -92,13 +160,39 @@ class SearchIntegrationTest {
     }
 
     @Test
+    void conversationalQuestionFindsRelevantSectionsWithoutSynonyms() {
+        SearchService.SearchOutcome outcome = searchService.search(
+                "Can you please explain dependency injection?", 0, 10, null);
+        assertThat(outcome.hits()).anySatisfy(hit ->
+                assertThat(hit.headingPath()).contains("Dependency Injection"));
+    }
+
+    @Test
+    void scopedSearchCanReadBeyondThreeSectionsAndPaginate() {
+        var first = searchService.search("spring", 0, 10, null).hits().get(0);
+        var scoped = searchService.search("spring", 0, 50, first.documentId());
+        assertThat(scoped.hits()).hasSizeGreaterThan(3);
+        var next = searchService.search("spring", 1, 3, first.documentId());
+        assertThat(next.hits()).isNotEmpty();
+        assertThat(next.totalResults()).isEqualTo(scoped.totalResults());
+        assertThat(next.hits().get(0).sectionId()).isEqualTo(scoped.hits().get(3).sectionId());
+    }
+
+    @Test
     void directTermQueryRanksExactHeadingMatchFirst() {
-        SearchService.SearchOutcome outcome = searchService.search("spring web", 0, 10, null);
+        SearchService.SearchOutcome outcome = searchService.search("spring mvc", 0, 10, null);
 
         assertThat(outcome.hits()).isNotEmpty();
         SearchHit top = outcome.hits().get(0);
         assertThat(top.headingPath()).contains("Spring MVC");
         assertThat(top.matchType()).isEqualTo(MatchType.EXACT);
+    }
+
+    @Test
+    void broadWebQueryFindsBothWebStacks() {
+        var hits = searchService.search("spring web", 0, 10, null).hits();
+        assertThat(hits).anySatisfy(hit -> assertThat(hit.headingPath()).contains("Spring MVC"));
+        assertThat(hits).anySatisfy(hit -> assertThat(hit.headingPath()).contains("Spring WebFlux"));
     }
 
     @Test

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { documentFileUrl, search, type SearchResult } from "@/lib/api";
 import { documentHref } from "@/lib/links";
-import { ALL_SCOPE, useSearchSlot } from "@/components/search-store";
+import { ALL_SCOPE, useSearchSlot, useLibraryRevision } from "@/components/search-store";
 import { DocumentSections, scrollToSection, useDocumentContent } from "@/components/document-view";
 import { DocumentOriginal, formatBytes } from "@/components/document-original";
 import { Snippet } from "@/components/snippet";
@@ -19,6 +19,7 @@ export function SearchPanel() {
 
     const scope = documentId ?? ALL_SCOPE;
     const [slot, patchSlot] = useSearchSlot(scope);
+    const getRevision = useLibraryRevision();
     const [loading, setLoading] = useState(false);
     const { content, error: documentError } = useDocumentContent(documentId);
 
@@ -42,6 +43,7 @@ export function SearchPanel() {
     const { result, error, input, page } = slot;
 
     async function runSearch(query: string, targetPage: number) {
+        const revision = getRevision();
         setLoading(true);
         patchSlot({ error: null });
         try {
@@ -50,9 +52,9 @@ export function SearchPanel() {
                 size: PAGE_SIZE,
                 documentId: documentId ?? undefined,
             });
-            patchSlot({ result: response, page: targetPage });
+            if (revision === getRevision()) patchSlot({ result: response, page: targetPage });
         } catch (e) {
-            patchSlot({ error: e instanceof Error ? e.message : "Search failed" });
+            if (revision === getRevision()) patchSlot({ error: e instanceof Error ? e.message : "Search failed" });
         } finally {
             setLoading(false);
         }

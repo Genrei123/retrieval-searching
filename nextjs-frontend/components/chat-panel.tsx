@@ -7,7 +7,7 @@ import { Markdown } from "@/components/markdown";
 import { Snippet } from "@/components/snippet";
 
 export function ChatPanel() {
-    const { input, setInput, question, answer, sources, status, error, ask } = useAsk();
+    const { input, setInput, question, answer, sources, status, error, cached, ask } = useAsk();
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -22,6 +22,7 @@ export function ChatPanel() {
                 <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    maxLength={200}
                     placeholder="Ask a question about your documents…"
                     className="flex-1 rounded-lg border border-stone-300 px-4 py-2.5 text-[15px] outline-none focus:border-stone-500"
                 />
@@ -39,6 +40,9 @@ export function ChatPanel() {
                     <div className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
                         {question}
                     </div>
+                    {cached && (
+                        <p className="mb-3 text-xs text-emerald-700">Previously asked · Answer served from memory</p>
+                    )}
 
                     <div className="text-[15px] text-stone-800">
                         {answer ? (
@@ -61,7 +65,7 @@ export function ChatPanel() {
                                 Sources
                             </div>
                             <ul className="flex flex-col gap-2">
-                                {sources.map((s) => (
+                                {sources.map((s, index) => (
                                     <li key={s.sectionId}>
                                         <Link
                                             href={documentHref(s.documentId, s.sectionId)}
@@ -69,7 +73,7 @@ export function ChatPanel() {
                                         >
                                             <div className="text-sm text-stone-600">
                                                 <span className="font-medium text-stone-800">
-                                                    {s.documentTitle}
+                                                    [{index + 1}] {s.documentTitle}
                                                 </span>
                                                 {s.headingPath && <span> — {s.headingPath}</span>}
                                             </div>

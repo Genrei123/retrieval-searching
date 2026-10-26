@@ -32,11 +32,26 @@ public class AsyncIngestionRunner {
         jobStore.update(jobId, JobStatus.RUNNING, null, null);
         try {
             IngestionService.IngestOutcome outcome =
-                    ingestionService.ingest(title, sourceUri, contentType, version, filename, bytes);
+                    ingestionService.ingest(title, sourceUri, contentType, version, filename, bytes,
+                            progress -> jobStore.progress(jobId, progress));
             jobStore.update(jobId, outcome.status(), outcome.message(), outcome.documentId());
         } catch (Exception e) {
             log.warn("Ingestion job {} failed", jobId, e);
             jobStore.update(jobId, JobStatus.FAILED, e.getMessage(), null);
+        }
+    }
+
+    @Async
+    public void update(UUID jobId, UUID documentId, String title, String sourceUri, String version,
+                       String contentType, String filename, byte[] bytes) {
+        jobStore.update(jobId, JobStatus.RUNNING, null, documentId);
+        try {
+            var outcome = ingestionService.update(documentId, title, sourceUri, version, contentType, filename, bytes,
+                    progress -> jobStore.progress(jobId, progress));
+            jobStore.update(jobId, outcome.status(), outcome.message(), documentId);
+        } catch (Exception e) {
+            log.warn("Document update {} failed", jobId, e);
+            jobStore.update(jobId, JobStatus.FAILED, e.getMessage(), documentId);
         }
     }
 }

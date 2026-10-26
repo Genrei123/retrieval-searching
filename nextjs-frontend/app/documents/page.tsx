@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { DocumentUpload } from "@/components/document-upload";
 import { DocumentList } from "@/components/document-list";
 
 export default function DocumentsPage() {
-    const [refreshKey, setRefreshKey] = useState(0);
 
     return (
         <main className="min-h-dvh bg-white text-stone-950">
@@ -15,14 +13,13 @@ export default function DocumentsPage() {
                         Documents
                     </h1>
                     <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-stone-500">
-                        Upload PDFs, Markdown, or HTML for ingestion, and manage what&apos;s
-                        already indexed.
+                        Build your dataset, inspect how each file is chunked, and manage the documents used by Search and Ask.
                     </p>
                 </header>
 
                 <div className="flex flex-col gap-8">
-                    <DocumentUpload onIngested={() => setRefreshKey((k) => k + 1)} />
-                    <DocumentList refreshKey={refreshKey} />
+                    <DocumentUpload />
+                    <DocumentList />
                 </div>
             </div>
         </main>

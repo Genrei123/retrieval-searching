@@ -6,6 +6,7 @@ import com.example.retrieval_search.domain.DocumentSection;
 import com.example.retrieval_search.domain.IngestionJob;
 import com.example.retrieval_search.ingestion.AsyncIngestionRunner;
 import com.example.retrieval_search.ingestion.JobStore;
+import com.example.retrieval_search.ingestion.IngestionService;
 import com.example.retrieval_search.repository.DocumentFileRepository;
 import com.example.retrieval_search.repository.DocumentRepository;
 import com.example.retrieval_search.repository.DocumentSectionRepository;
@@ -60,6 +61,8 @@ public class DocumentController {
             @RequestParam(value = "sourceUri", required = false) String sourceUri,
             @RequestParam(value = "version", required = false, defaultValue = "1") String version) {
 
+        IngestionService.validateMetadata(title, version);
+        if (file.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The uploaded file is empty.");
         String contentType = detectContentType(file.getOriginalFilename());
         byte[] bytes;
         try {
@@ -69,8 +72,31 @@ public class DocumentController {
         }
 
         UUID jobId = jobStore.create();
-        asyncIngestionRunner.run(jobId, title, sourceUri, contentType, version, file.getOriginalFilename(), bytes);
+        asyncIngestionRunner.run(jobId, title.trim(), sourceUri, contentType, version.trim(), file.getOriginalFilename(), bytes);
 
+        return ResponseEntity.accepted().body(new IngestResponse(jobId));
+    }
+
+    @Operation(summary = "Edit document metadata or replace its file", description = "Keeps the document ID. A replacement file is re-chunked and indexed atomically; omit file to keep its content.")
+    @PutMapping(value = "/documents/{id}", consumes = "multipart/form-data")
+    public ResponseEntity<IngestResponse> update(@PathVariable UUID id,
+            @RequestParam("title") String title,
+            @RequestParam(value = "sourceUri", required = false) String sourceUri,
+            @RequestParam(value = "version", defaultValue = "1") String version,
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        get(id);
+        IngestionService.validateMetadata(title, version);
+        String contentType = null;
+        byte[] bytes = null;
+        if (file != null) {
+            if (file.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The replacement file is empty.");
+            contentType = detectContentType(file.getOriginalFilename());
+            try { bytes = file.getBytes(); }
+            catch (IOException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unreadable upload", e); }
+        }
+        UUID jobId = jobStore.create();
+        asyncIngestionRunner.update(jobId, id, title.trim(), sourceUri, version.trim(), contentType,
+                file == null ? null : file.getOriginalFilename(), bytes);
         return ResponseEntity.accepted().body(new IngestResponse(jobId));
     }
 
@@ -126,7 +152,7 @@ public class DocumentController {
     public JobStatusResponse jobStatus(@PathVariable UUID jobId) {
         IngestionJob job = jobStore.find(jobId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown jobId: " + jobId));
-        return new JobStatusResponse(job.jobId(), job.status(), job.message(), job.documentId());
+        return new JobStatusResponse(job.jobId(), job.status(), job.message(), job.documentId(), job.progress());
     }
 
     @Operation(summary = "Delete a document", description = "Removes the document and its sections (sections cascade via the database).")

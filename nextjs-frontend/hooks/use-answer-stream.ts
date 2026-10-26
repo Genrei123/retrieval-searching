@@ -9,6 +9,7 @@ type StreamState = {
     sources: SearchResult[];
     status: "idle" | "streaming" | "done" | "error";
     error: string | null;
+    cached: boolean;
 };
 
 const INITIAL_STATE: StreamState = {
@@ -17,6 +18,7 @@ const INITIAL_STATE: StreamState = {
     sources: [],
     status: "idle",
     error: null,
+    cached: false,
 };
 
 /** Drives the /answer/stream SSE endpoint: emits a `sources` event once retrieval finishes,
@@ -33,17 +35,19 @@ export function useAnswerStream() {
     const ask = useCallback(
         (question: string, opts: { topK?: number; documentId?: string } = {}) => {
             stop();
-            setState({ question, answer: "", sources: [], status: "streaming", error: null });
+            setState({ ...INITIAL_STATE, question, status: "streaming" });
 
             const es = new EventSource(answerStreamUrl(question, opts));
             sourceRef.current = es;
 
             es.addEventListener("sources", (event) => {
+                if (sourceRef.current !== es) return;
                 const sources = JSON.parse((event as MessageEvent).data) as SearchResult[];
                 setState((prev) => ({ ...prev, sources }));
             });
 
             es.addEventListener("token", (event) => {
+                if (sourceRef.current !== es) return;
                 // The backend wraps each token as { token: "..." } so a word-initial leading
                 // space survives: a raw "data: Section" line would have that one leading space
                 // stripped by EventSource per the SSE spec.
@@ -51,12 +55,27 @@ export function useAnswerStream() {
                 setState((prev) => ({ ...prev, answer: prev.answer + token }));
             });
 
+            es.addEventListener("cache", (event) => {
+                if (sourceRef.current !== es) return;
+                const { cached } = JSON.parse((event as MessageEvent).data) as { cached: boolean };
+                setState((prev) => ({ ...prev, cached }));
+            });
+
             es.addEventListener("done", () => {
+                if (sourceRef.current !== es) return;
                 setState((prev) => ({ ...prev, status: "done" }));
                 stop();
             });
 
+            es.addEventListener("generation-error", (event) => {
+                if (sourceRef.current !== es) return;
+                const { message } = JSON.parse((event as MessageEvent).data) as { message: string };
+                setState((prev) => ({ ...prev, status: "error", error: message }));
+                stop();
+            });
+
             es.onerror = () => {
+                if (sourceRef.current !== es) return;
                 setState((prev) =>
                     prev.status === "done"
                         ? prev

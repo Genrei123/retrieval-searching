@@ -38,10 +38,14 @@ public class SearchService {
 
         String trimmedQuery = rawQuery.trim();
         Set<String> candidates = tokenizer.candidates(trimmedQuery);
-        List<String> expansions = synonymRepository.findExpansions(candidates);
+        // Expanding with OR would bypass a user's quoted phrase or excluded terms.
+        List<String> expansions = tokenizer.hasSearchSyntax(trimmedQuery)
+                ? List.of() : synonymRepository.findExpansions(candidates);
 
         long startNanos = System.nanoTime();
-        List<SearchHit> hits = searchQueryRepository.search(trimmedQuery, expansions, page, size, documentId);
+        page = Math.max(0, page);
+        size = Math.min(50, Math.max(1, size));
+        List<SearchHit> hits = searchQueryRepository.search(tokenizer.retrievalQuery(trimmedQuery), expansions, page, size, documentId);
         long tookMs = (System.nanoTime() - startNanos) / 1_000_000;
 
         long totalResults = hits.isEmpty() ? 0 : hits.get(0).totalCount();

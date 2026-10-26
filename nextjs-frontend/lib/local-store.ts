@@ -1,13 +1,4 @@
-/**
- * A `localStorage` key exposed as a `useSyncExternalStore` source.
- *
- * The homepage keeps two things in the browser — the cached briefing and the daily task
- * ticks — and both need the same three properties: they must not be read during a server
- * render, a component must re-render when they change, and `getSnapshot` must return a
- * referentially stable value or React re-renders forever. Reading them in an effect and
- * copying into state would do none of that, and Next 16's React rules reject it outright
- * (`react-hooks/set-state-in-effect`).
- */
+/** A browser localStorage key exposed as a stable useSyncExternalStore source for preferences. */
 export type LocalStore<T> = {
     subscribe: (onChange: () => void) => () => void;
     /** Client snapshot. Re-parses only when the underlying string actually changed. */

@@ -1,6 +1,7 @@
 package com.example.retrieval_search.web;
 
 import org.springframework.dao.DataAccessException;
+import com.example.retrieval_search.generation.GenerationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -11,6 +12,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(GenerationException.class)
+    public ResponseEntity<Map<String, Object>> handleGenerationFailure(GenerationException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
+    }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleStatus(ResponseStatusException e) {

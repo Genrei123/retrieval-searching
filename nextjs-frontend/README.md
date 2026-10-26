@@ -1,41 +1,19 @@
-# Retrieval Search — frontend
+# RAG Library frontend
 
-Next.js UI for the `retrieval-search` Spring Boot backend: upload and manage documents, run
-full-text search over their sections, and ask questions answered by retrieval-augmented
-generation, streamed in as the model writes them.
+Next.js UI for the sibling Spring Boot backend. Run `npm ci` and `npm run dev` after starting
+the backend. The browser calls `NEXT_PUBLIC_API_BASE_URL` directly (default http://localhost:8080/api/v1).
 
-## Quick start
+| Route | Purpose |
+| --- | --- |
+| / | Redirect to Search |
+| /search | Search and read documents, original files, and indexed chunks |
+| /ask | Stream document-grounded answers and replay exact questions from memory |
+| /documents | Upload, inspect real chunking output, edit metadata, replace files, delete |
 
-Start the backend first (see `../README.md` / `../docker-compose.yml`), then:
+Root providers retain searches, answers, draft uploads, and upload polling across tab switches.
+Document changes invalidate cached document content and search results and reset the visible answer.
+Job progress comes from the backend, not animation timers. Completed uploads show full chunk text.
 
-```bash
-npm install
-cp .env.example .env.local   # defaults already point at http://localhost:8080/api/v1
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Pages
-
-| Route         | What                                                                |
-|---------------|----------------------------------------------------------------------|
-| `/`           | Ask a question; the answer streams in token-by-token via SSE, with the retrieved sources listed underneath. |
-| `/search`     | Full-text search over document sections, paginated.                  |
-| `/documents`  | Upload a PDF/Markdown/HTML file (polls the async ingestion job until it finishes), list uploaded documents, delete one. |
-
-## How streaming works
-
-`GET /api/v1/answer/stream` on the backend is a Server-Sent Events endpoint: it emits a `sources`
-event once retrieval finishes, then a `token` event per chunk of generated text, then `done`.
-`hooks/use-answer-stream.ts` drives it with the browser's native `EventSource`.
-
-## Stack
-
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · react-markdown + remark-gfm.
-
-No server-side API routes of its own — every backend call happens directly from the browser
-against `NEXT_PUBLIC_API_BASE_URL` (see `lib/api.ts`), which requires the backend's CORS config
-(`app.cors.allowed-origins` in
-`../rag-document-search/src/main/resources/application.yaml`) to include this app's
-origin.
+Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` to verify changes.
+The Docker image must be rebuilt after changes: `docker compose up -d --build frontend`.
+See the root README for API routes, chunking rules, and backend tests.

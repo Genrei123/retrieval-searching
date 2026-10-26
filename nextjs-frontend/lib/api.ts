@@ -58,11 +58,24 @@ export type DocumentContent = {
 
 export type IngestResponse = { jobId: string };
 
+export type ChunkPreview = { ordinal: number; headingPath: string | null; wordCount: number; preview: string };
+export type IngestionProgress = {
+    stage: "QUEUED" | "EXTRACTING" | "CHUNKING" | "INDEXING" | "DONE" | "FAILED" | "UNCHANGED" | "METADATA";
+    strategy: "HEADINGS" | "SENTENCES" | null;
+    extractedWords: number;
+    totalChunks: number;
+    targetWords: number;
+    maxWords: number;
+    minWords: number;
+    chunks: ChunkPreview[];
+};
+
 export type JobStatusResponse = {
     jobId: string;
     status: JobStatus;
     message: string | null;
     documentId: string | null;
+    progress: IngestionProgress;
 };
 
 async function unwrap<T>(response: Response): Promise<T> {
@@ -113,10 +126,12 @@ export async function uploadDocument(
     file: File,
     title: string,
     sourceUri?: string,
+    version = "1",
 ): Promise<IngestResponse> {
     const form = new FormData();
     form.append("file", file);
     form.append("title", title);
+    form.append("version", version);
     if (sourceUri) form.append("sourceUri", sourceUri);
 
     const response = await fetch(`${API_BASE_URL}/documents`, {
@@ -124,6 +139,17 @@ export async function uploadDocument(
         body: form,
     });
     return unwrap<IngestResponse>(response);
+}
+
+export async function updateDocument(id: string, input: {
+    title: string; sourceUri: string; version: string; file: File | null;
+}): Promise<IngestResponse> {
+    const form = new FormData();
+    form.append("title", input.title);
+    form.append("sourceUri", input.sourceUri);
+    form.append("version", input.version);
+    if (input.file) form.append("file", input.file);
+    return unwrap<IngestResponse>(await fetch(`${API_BASE_URL}/documents/${id}`, { method: "PUT", body: form }));
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
@@ -144,67 +170,4 @@ export function answerStreamUrl(question: string, opts: { topK?: number; documen
     if (opts.topK != null) params.set("topK", String(opts.topK));
     if (opts.documentId) params.set("documentId", opts.documentId);
     return `${API_BASE_URL}/answer/stream?${params}`;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Calendar                                                                    */
-/* -------------------------------------------------------------------------- */
-
-/** `PERSONAL` entries are the planner and are editable; `HOLIDAY` rows are seeded
- * reference data and the backend refuses writes against them. */
-export type EventKind = "PERSONAL" | "HOLIDAY";
-
-export type CalendarEvent = {
-    id: string;
-    /** `YYYY-MM-DD`, a plain calendar day with no timezone attached to it. */
-    date: string;
-    /** `HH:mm:ss`, or null for an all-day entry. Every holiday is all-day. */
-    startTime: string | null;
-    title: string;
-    notes: string | null;
-    kind: EventKind;
-    createdAt: string;
-};
-
-export type CalendarEventInput = {
-    date: string;
-    startTime?: string | null;
-    title: string;
-    notes?: string | null;
-};
-
-/** Everything between two days, inclusive — one month of the calendar grid per call. */
-export async function listCalendar(from: string, to: string): Promise<CalendarEvent[]> {
-    const params = new URLSearchParams({ from, to });
-    const response = await fetch(`${API_BASE_URL}/calendar?${params}`, { cache: "no-store" });
-    return unwrap<CalendarEvent[]>(response);
-}
-
-export async function createCalendarEvent(input: CalendarEventInput): Promise<CalendarEvent> {
-    const response = await fetch(`${API_BASE_URL}/calendar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-    });
-    return unwrap<CalendarEvent>(response);
-}
-
-export async function updateCalendarEvent(
-    id: string,
-    input: CalendarEventInput,
-): Promise<CalendarEvent> {
-    const response = await fetch(`${API_BASE_URL}/calendar/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-    });
-    return unwrap<CalendarEvent>(response);
-}
-
-export async function deleteCalendarEvent(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/calendar/${id}`, { method: "DELETE" });
-    if (!response.ok && response.status !== 404) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error ?? `Delete failed with ${response.status}`);
-    }
 }

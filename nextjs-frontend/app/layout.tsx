@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Jarvis",
+    title: "RAG Library",
     description: "Search, browse, and ask questions over your ingested documents.",
 };
 

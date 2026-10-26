@@ -22,6 +22,8 @@ type SearchStore = {
     patchSlot: (scope: string, patch: Partial<SearchSlot>) => void;
     getCachedDocument: (documentId: string) => DocumentContent | undefined;
     cacheDocument: (content: DocumentContent) => void;
+    invalidate: () => void;
+    getRevision: () => number;
 };
 
 const SearchContext = createContext<SearchStore | null>(null);
@@ -31,6 +33,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     // Fetched documents are a cache, not rendered state — a ref keeps re-opening a document
     // instant without re-rendering every consumer when one is stored.
     const documents = useRef<Map<string, DocumentContent>>(new Map());
+    const revision = useRef(0);
+    const getRevision = useCallback(() => revision.current, []);
 
     const patchSlot = useCallback((scope: string, patch: Partial<SearchSlot>) => {
         setSlots((prev) => ({ ...prev, [scope]: { ...(prev[scope] ?? EMPTY_SLOT), ...patch } }));
@@ -45,9 +49,15 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         documents.current.set(content.document.id, content);
     }, []);
 
+    const invalidate = useCallback(() => {
+        revision.current++;
+        documents.current.clear();
+        setSlots({});
+    }, []);
+
     const value = useMemo(
-        () => ({ slots, patchSlot, getCachedDocument, cacheDocument }),
-        [slots, patchSlot, getCachedDocument, cacheDocument],
+        () => ({ slots, patchSlot, getCachedDocument, cacheDocument, invalidate, getRevision }),
+        [slots, patchSlot, getCachedDocument, cacheDocument, invalidate, getRevision],
     );
 
     return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>;
@@ -70,4 +80,12 @@ export function useSearchSlot(scope: string): [SearchSlot, (patch: Partial<Searc
 export function useDocumentCache() {
     const { getCachedDocument, cacheDocument } = useSearchStore();
     return { get: getCachedDocument, set: cacheDocument };
+}
+
+export function useInvalidateDocuments() {
+    return useSearchStore().invalidate;
+}
+
+export function useLibraryRevision() {
+    return useSearchStore().getRevision;
 }

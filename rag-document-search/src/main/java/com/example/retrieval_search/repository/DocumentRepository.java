@@ -1,6 +1,8 @@
 package com.example.retrieval_search.repository;
 
 import com.example.retrieval_search.domain.Document;
+import com.example.retrieval_search.generation.AnswerCache.CorpusChanged;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -24,9 +26,11 @@ public class DocumentRepository {
     );
 
     private final JdbcTemplate jdbc;
+    private final ApplicationEventPublisher events;
 
-    public DocumentRepository(JdbcTemplate jdbc) {
+    public DocumentRepository(JdbcTemplate jdbc, ApplicationEventPublisher events) {
         this.jdbc = jdbc;
+        this.events = events;
     }
 
     public List<Document> findAll() {
@@ -47,16 +51,22 @@ public class DocumentRepository {
 
     public boolean deleteById(UUID id) {
         int deleted = jdbc.update("DELETE FROM documents WHERE id = ?", id);
+        if (deleted > 0) events.publishEvent(new CorpusChanged());
         return deleted > 0;
+    }
+
+    /** Serializes replacement and deletion so a deleted document cannot be recreated by a late job. */
+    public Optional<Document> findByIdForUpdate(UUID id) {
+        return jdbc.query("SELECT * FROM documents WHERE id = ? FOR UPDATE", MAPPER, id).stream().findFirst();
     }
 
     public void upsert(Document document) {
         int updated = jdbc.update(
                 """
-                UPDATE documents SET source_uri = ?, content_type = ?, version = ?,
+                UPDATE documents SET title = ?, source_uri = ?, content_type = ?, version = ?,
                     ingested_at = ?, checksum = ? WHERE id = ?
                 """,
-                document.sourceUri(), document.contentType(), document.version(),
+                document.title(), document.sourceUri(), document.contentType(), document.version(),
                 Timestamp.from(document.ingestedAt()), document.checksum(), document.id());
         if (updated == 0) {
             jdbc.update(
@@ -67,5 +77,6 @@ public class DocumentRepository {
                     document.id(), document.title(), document.sourceUri(), document.contentType(),
                     document.version(), Timestamp.from(document.ingestedAt()), document.checksum());
         }
+        events.publishEvent(new CorpusChanged());
     }
 }

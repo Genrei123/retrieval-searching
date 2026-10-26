@@ -1,165 +1,142 @@
-# Jarvis
+# RAG Library
 
-A retrieval-search assistant — a Spring Boot API that ingests documents and answers questions
-over them with a local LLM, a Next.js UI, and n8n for workflow automation. The whole thing runs
-as one Docker Compose stack.
+A focused document dataset manager with full-text retrieval and OpenAI-powered retrieval-augmented generation.
+The app contains three views: **Search**, **Ask**, and **Documents**. The root URL redirects to Search.
 
-## Run it
+## Run
 
-On any machine with Docker, from a fresh clone:
-
-```bash
-docker compose up -d
-```
-
-That is the whole setup. No `.env` to create, no manual import step — the first run builds the
-two application images, pulls the `llama3.2:3b` model into Ollama, runs the database migrations,
-and loads the `n8n/` workflows into n8n before it starts. Later runs reuse all of it.
-
-One thing cannot be automated: the **Gmail credential** is an OAuth grant against a real Google
-account, so on each new machine open http://localhost:5678 → Credentials → *Gmail account* and
-reconnect it. The briefing and reply workflows return errors until you do. Everything else —
-search, ask, documents — works immediately.
-
-| Service | URL | What it is |
-| --- | --- | --- |
-| Jarvis UI | http://localhost:3000 | Home, Ask, Search, and Documents |
-| Jarvis API | http://localhost:8080/api/v1 | REST backend |
-| API docs | http://localhost:8080/swagger-ui.html | Swagger UI |
-| n8n | http://localhost:5678 | Workflow automation |
-| Postgres (retrieval) | localhost:5432 | Documents and sections |
-| Ollama | http://localhost:11434 | Local model server |
+Copy `.env.example` to `.env` at the repository root and set `OPENAI_API_KEY` to your OpenAI API key.
+The key is backend-only and `.env` is ignored by Git. Never put it in a `NEXT_PUBLIC_*` variable.
 
 ```bash
-docker compose down          # stop, keep all data
-docker compose up -d --build # rebuild after code changes
-docker compose logs -f app   # tail the backend
+docker compose up -d --build --remove-orphans
 ```
 
-`docker compose up -d` on its own **reuses the images it already built** — it only builds one
-that is missing. After editing `rag-document-search/` or `nextjs-frontend/`, either pass
-`--build`, or let Compose do it for you:
+The stack runs PostgreSQL, the Spring Boot API, and the Next.js UI. Generation uses the OpenAI Responses API.
+The automation services and their workflow files have been removed. When upgrading an existing
+stack, `--remove-orphans` stops containers no longer declared by Compose; existing data volumes
+are not deleted. The Compose project name and retrieval volume names remain unchanged.
 
-```bash
-docker compose up -d --build frontend  # rebuild just the UI and replace its container
-docker compose watch                   # rebuild the UI automatically on every edit
-```
-
-`watch` is configured for the frontend only (`develop.watch` in `docker-compose.yml`) and does a
-full image rebuild per change, so it suits leaving a stack running while you edit. For fast
-iteration on the UI, `npm run dev` in `nextjs-frontend/` against the containerised backend is
-still the quicker loop.
-
-In Docker Desktop everything appears under a single **jarvis** project.
-
-## Layout
-
-- `rag-document-search/` — Spring Boot API (`com.example.retrieval_search`), Flyway migrations in
-  `rag-document-search/src/main/resources/db/migration`.
-- `nextjs-frontend/` — Next.js App Router UI. See `nextjs-frontend/AGENTS.md` for its
-  architecture and invariants.
-- `n8n/` — the `Jarvis Homepage Briefing` workflow, version-controlled. See below.
-- `rag-document-search/Dockerfile` / `nextjs-frontend/Dockerfile` — the two application images
-  (`jarvis-backend`, `jarvis-frontend`).
-
-## The calendar
-
-The homepage carries a calendar down its right-hand side: the user's planner and the Philippine
-holidays it is laid over, both rows in the `calendar_events` table of the retrieval Postgres
-(migration `V4__calendar.sql`). Planner entries are created, edited and deleted from the panel
-through `/api/v1/calendar`; holidays are seeded reference data and the write endpoints refuse
-them, so the UI can show them in the same grid without being able to change them.
-
-Holidays are seeded for 2026 and 2027 — the regular holidays and fixed-date special days set by
-law, plus the movable Christian dates derived from Easter. Chinese New Year, Eid'l Fitr and
-Eid'l Adha are declared by proclamation each year and are deliberately not seeded; add them as
-planner entries once they are announced.
-
-Jarvis reads the same rows. The briefing workflow's **Get Calendar** node fetches
-`/api/v1/calendar/upcoming?days=7` and the week ahead goes into the agent's prompt, so the
-greeting can mention a holiday and the three tasks it sets do not collide with something already
-on the day.
-
-## The homepage briefing
-
-Opening the UI shows a morning briefing: the forecast, a summary of the last day of email, what
-needs a reply, three tasks for today, a follow-up question about yesterday's tasks, a video to
-watch, and three documents pulled at random from the library.
-
-Clicking an email on the **Needs a reply** card opens a composer; sending hands the reply to Gmail
-through a second workflow, `Jarvis Send Reply`
-(`http://localhost:5678/webhook/jarvis-reply`). Gmail derives the recipients and the `Re:` subject
-from the message being replied to, so only the body is written by hand.
-
-The **Watch** card embeds YouTube. Video ids come from public channel Atom feeds — no API key, no
-extra credential — and the channel list is the one constant at the top of `n8n/src/pick-channels.js`.
-Edit it to change what shows up.
-
-The briefing comes from `Jarvis Homepage Briefing`, which the homepage calls over its webhook at
-`http://localhost:5678/webhook/jarvis-briefing`. Both workflows are checked in:
-
-```bash
-cd n8n
-./import.sh          # regenerate, load into the running container, publish, restart n8n
-```
-
-The two `.json` files are generated by `build.mjs` rather than hand-edited, so the Code nodes'
-JavaScript stays readable in `n8n/src/*.js`. If you change a workflow in the n8n editor instead,
-export it back over the JSON or the next `./import.sh` will overwrite your edits.
-
-A run takes a minute or two — the briefing is written by `llama3.2:3b` on the local Ollama — so the
-homepage caches it in the browser and runs the workflow again only when you press **Refresh**.
-
-The workflow needs three credentials in n8n: **Gmail account** (OAuth2, for the inbox), **Ollama
-account**, and **Postgres account**, which is where the agent keeps the chat memory that lets it
-ask how yesterday's tasks went.
-
-## Configuration
-
-`.env` is **optional**. Every value has a working local default in `docker-compose.yml`, which is
-what makes a fresh clone run unattended. Copy `.env.example` to `.env` only to override them — for
-instance to set a real password for n8n's Postgres. `.env` is gitignored; keep it that way.
-
-Once set, the n8n Postgres credentials must stay stable, or n8n will not find its existing
-workflows.
-
-The frontend talks to the backend and to n8n **from the browser**, so both URLs are baked into
-the client bundle at build time and must be reachable from your machine, not from inside the
-compose network. To point at a deployed stack:
-
-```bash
-docker build \
-  --build-arg NEXT_PUBLIC_API_BASE_URL=https://api.example.com/api/v1 \
-  --build-arg NEXT_PUBLIC_N8N_BRIEFING_URL=https://n8n.example.com/webhook/jarvis-briefing \
-  --build-arg NEXT_PUBLIC_N8N_REPLY_URL=https://n8n.example.com/webhook/jarvis-reply \
-  -t jarvis-frontend ./nextjs-frontend
-```
-
-Both webhook responses carry an `Access-Control-Allow-Origin` header pinned to
-`http://localhost:3000`. It comes from `UI_ORIGIN` at the top of `n8n/build.mjs`, so serving the UI
-from a different origin means changing it there and re-running `./import.sh`.
-
-## Data
-
-Four named volumes, all preserved across `docker compose down`:
-
-| Volume | Holds |
+| Service | URL |
 | --- | --- |
-| `jarvis_pgdata` | Ingested documents and sections |
-| `jarvis_ollama_data` | Downloaded models |
-| `jarvis_n8n_db_storage` | n8n workflows and credentials |
-| `jarvis_n8n_storage` | n8n instance state, and the marker that records first-run seeding |
+| RAG Library | http://localhost:3000 |
+| API | http://localhost:8080/api/v1 |
+| API documentation | http://localhost:8080/swagger-ui.html |
 
-## Workflows
+## OpenAI configuration
 
-`n8n/` holds the workflow definitions as JSON, generated by `n8n/build.mjs`. They are the source
-of truth, not the copies inside n8n's database.
+The default model is `gpt-6-luna`, configurable with `OPENAI_MODEL`. The model must be available
+to your OpenAI API project. The application uses the [Responses API](https://developers.openai.com/api/docs/guides/text)
+and [streaming events](https://developers.openai.com/api/docs/guides/streaming-responses).
+[GPT-6 Luna documentation](https://developers.openai.com/api/docs/models/gpt-6-luna) describes the default model.
 
-- On a **fresh** n8n volume, the `n8n-import` service loads and publishes them automatically
-  before n8n starts — n8n registers production webhooks at boot, so a workflow that appears
-  afterwards keeps 404ing until a restart.
-- On an **existing** volume it does nothing, so workflows edited in the n8n UI are never
-  clobbered by a routine `docker compose up`.
+| Backend environment variable | Default |
+| --- | --- |
+| OPENAI_API_KEY | Empty; required to generate answers |
+| OPENAI_MODEL | gpt-6-luna |
+| OPENAI_REASONING_EFFORT | low (empty omits this setting for models that do not support it) |
+| OPENAI_MAX_OUTPUT_TOKENS | 2048 (includes reasoning tokens) |
+| OPENAI_TIMEOUT | PT2M |
 
-To push changed definitions into a running n8n, run `./n8n/import.sh` — it rebuilds the JSON,
-imports, publishes, and restarts the container so the webhooks re-register.
+When running Java directly from your IDE, set these variables in its run configuration;
+Spring Boot does not automatically load the root Compose `.env` file. Restart the backend after changing them.
+Uploads, chunking, and search work without a key. Ask displays a configuration error when generation needs one.
+The question and selected excerpts are sent to OpenAI; original files and the search index remain in your database.
+Requests set `store: false` to disable Responses API response storage. Exact-repeat answers are still reused
+from backend memory without another API call. Failed or incomplete responses are not cached.
+Ollama and its model-download job are no longer required; existing volumes are not deleted by this change.
+
+## Document CRUD and chunk inspection
+
+- **Create:** upload a PDF, Markdown, or HTML file with a title, version, and optional source reference.
+- **Read:** open a document from the library to read its original file or indexed chunks and search within it.
+- **Update:** choose **Edit / Replace file**. Change metadata only, or select a replacement file to extract,
+  chunk, and index it again. Updates keep the document ID. The previous content remains intact if processing fails.
+- **Delete:** confirm deletion of the document, original file, and indexed chunks.
+
+Files may be up to 25 MB. PDFs require extractable text; scanned PDFs need OCR before upload.
+HTML is converted to visible text with H1-H3 headings retained. Duplicate uploads with the same title
+and checksum keep the existing document; different content with an existing title must use Edit / Replace file.
+
+During upload, the UI polls real backend progress: transfer, extraction, chunk creation, and indexing.
+Small files can complete between polls; completed stages and chunk output remain visible for inspection.
+Chunk cards show order, headings, word counts, relative size, and expandable full text after saving.
+Processing previews contain up to 100 chunks with 300-character excerpts; the saved document view loads
+all chunks and pages through them. Metadata-only edits explicitly show that existing chunks were retained.
+Upload state and polling survive navigation between app tabs, but not a browser reload or backend restart.
+
+Markdown and HTML split at H1-H3 boundaries. Large sections group paragraphs toward 400 words; PDFs group
+sentences toward 400 words. Individual oversized paragraphs/sentences are split, and every new chunk is
+limited to 800 words. Neighbors under 50 words merge when the combined chunk stays within the limit.
+Successful changes clear both browser retrieval state and the backend answer cache.
+
+### API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | /api/v1/documents | Multipart upload: file, title, sourceUri (optional), version |
+| GET | /api/v1/documents | List documents |
+| GET | /api/v1/documents/{id} | Metadata |
+| GET | /api/v1/documents/{id}/content | Metadata and ordered chunks |
+| GET | /api/v1/documents/{id}/file | Original file |
+| PUT | /api/v1/documents/{id} | Multipart title, sourceUri, version; optional replacement file |
+| DELETE | /api/v1/documents/{id} | Delete document and associated content |
+| GET | /api/v1/documents/jobs/{jobId} | Status, real processing stage, chunk counts and previews |
+
+POST and PUT return HTTP 202 with a jobId. The job reaches DONE, SKIPPED_UNCHANGED, or FAILED.
+Job snapshots are process-local and bounded to 128 jobs; completed jobs older than an hour are cleaned
+up on subsequent uploads, and older finished jobs may be evicted earlier at capacity.
+The historical calendar migration is retained so existing Flyway databases can upgrade unchanged;
+its API and UI have been removed.
+
+## Search and answer memory
+
+Search removes conversational framing (for example, "Can you please explain connection pooling?")
+before retrieval, while retaining the original question for generation. Quoted phrases, `OR`, and
+excluded terms keep their search syntax. Global results retain a three-section limit per document;
+searching inside one document can page through all matching sections.
+
+Ask stores completed answers and their sources in backend memory. The **second identical question**
+and subsequent repeats replay that answer without another search or model call. Matching includes
+the exact submitted text, document scope, source count (`topK`), and answer/topic mode. Case or
+punctuation changes are separate questions. JSON and streaming answers share the same cache;
+concurrent identical requests share one generation. The UI labels replays as served from memory.
+
+Memory holds up to 256 answers for 30 minutes by default, evicts the least recently used entries,
+and resets on backend restart. Configure `ANSWER_CACHE_MAX_ENTRIES` and `ANSWER_CACHE_TTL` (an ISO
+duration such as `PT30M`) in the backend environment. A zero capacity or TTL disables retention.
+Uploads, re-ingestion, and deletion invalidate answers after successful writes; failed or incomplete
+model output is never retained. Memory belongs to one backend process and the shared document
+library; it is not durable conversation history or a cache shared between server replicas.
+
+Generation uses a bounded, deduplicated set of excerpts, numbered source citations, and a prompt
+that asks the model to acknowledge missing evidence. The displayed source numbers correspond to
+the excerpts actually passed to the model.
+
+
+## Development and verification
+
+The backend requires JDK 21+ and Maven (or the included wrapper). The frontend requires Node.js.
+
+```bash
+cd nextjs-frontend
+npm ci
+npm run dev
+npm run lint
+npm run build
+```
+
+`NEXT_PUBLIC_API_BASE_URL` is baked into the browser bundle. It defaults to
+http://localhost:8080/api/v1. Backend configuration is in
+`rag-document-search/src/main/resources/application.yaml`. Optional Compose answer-cache settings
+are shown in `.env.example`.
+
+```bash
+cd rag-document-search
+./mvnw '-Dtest=*Test,!SearchIntegrationTest' test
+./mvnw -Dtest=SearchIntegrationTest -Dapi.version=1.44 test  # disposable PostgreSQL; Docker required
+```
+
+After source changes, rebuild the running stack with
+`docker compose up -d --build --remove-orphans`. This repository contains no external workflow
+or email integration. OpenAI generates answers from retrieved excerpts of your uploaded documents.

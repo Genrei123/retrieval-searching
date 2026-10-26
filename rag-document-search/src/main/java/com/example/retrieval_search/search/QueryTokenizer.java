@@ -3,6 +3,7 @@ package com.example.retrieval_search.search;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 
 @Component
@@ -19,7 +20,7 @@ public class QueryTokenizer {
      * keys like "web app" still match even though "web" and "app(s)" survive stopword removal).
      */
     public Set<String> candidates(String rawQuery) {
-        String normalized = rawQuery.toLowerCase().replaceAll("[^a-z0-9\\s]", " ").trim().replaceAll("\\s+", " ");
+        String normalized = normalize(rawQuery);
         Set<String> candidates = new LinkedHashSet<>();
         if (normalized.isEmpty()) {
             return candidates;
@@ -36,5 +37,31 @@ public class QueryTokenizer {
             candidates.add(tokens[i] + " " + tokens[i + 1]);
         }
         return candidates;
+    }
+
+    /** Remove question framing while preserving explicit web-search operators and phrases. */
+    public String retrievalQuery(String rawQuery) {
+        if (hasSearchSyntax(rawQuery)) {
+            return rawQuery;
+        }
+        String normalized = normalize(rawQuery);
+        if (!normalized.matches("^(what|how|why|when|where|which|who|can|could|please|explain|describe|tell)\\b.*")) {
+            return rawQuery;
+        }
+        String terms = java.util.Arrays.stream(normalized.split(" "))
+                .filter(token -> !STOPWORDS.contains(token))
+                .filter(token -> !Set.of("can", "could", "please", "explain", "describe", "tell", "me", "about", "you").contains(token))
+                .distinct().collect(java.util.stream.Collectors.joining(" "));
+        return terms.isBlank() ? rawQuery : terms;
+    }
+
+    public boolean hasSearchSyntax(String query) {
+        return query.contains("\"") || query.matches("(?s).*(?:^|\\s)-\\S+.*")
+                || query.matches("(?is).*\\bor\\b.*");
+    }
+
+    private String normalize(String query) {
+        return query.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}\\s]", " ")
+                .trim().replaceAll("\\s+", " ");
     }
 }

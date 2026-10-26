@@ -11,18 +11,25 @@ spring:
   servlet:
     multipart:
       max-file-size: 25MB
-      max-request-size: 25MB
+      max-request-size: 26MB
 
 server:
   port: ${SERVER_PORT:8080}
 
 app:
+  answer-cache:
+    max-entries: ${ANSWER_CACHE_MAX_ENTRIES:256}
+    ttl: ${ANSWER_CACHE_TTL:PT30M}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
-ollama:
-  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-  model: ${OLLAMA_MODEL:llama3.2:3b}
+openai:
+  base-url: https://api.openai.com/v1
+  api-key: ${OPENAI_API_KEY:}
+  model: ${OPENAI_MODEL:gpt-6-luna}
+  reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
+  max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:2048}
+  timeout: ${OPENAI_TIMEOUT:PT2M}
 
 springdoc:
   swagger-ui:

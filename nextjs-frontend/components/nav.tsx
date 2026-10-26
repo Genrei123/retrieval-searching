@@ -5,9 +5,8 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const LINKS = [
-    { href: "/", label: "Home" },
-    { href: "/ask", label: "Ask" },
     { href: "/search", label: "Search" },
+    { href: "/ask", label: "Ask" },
     { href: "/documents", label: "Documents" },
 ];
 
@@ -18,7 +17,7 @@ export function Nav() {
         <nav className="border-b border-stone-200">
             <div className="mx-auto flex max-w-6xl items-center gap-1 px-6">
                 <span className="mr-4 text-sm font-medium tracking-tight text-stone-950">
-                    Jarvis
+                    RAG Library
                 </span>
                 {LINKS.map((link) => {
                     const active = pathname === link.href;

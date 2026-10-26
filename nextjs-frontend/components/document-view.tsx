@@ -29,8 +29,10 @@ export function useDocumentContent(documentId: string | null) {
         let cancelled = false;
         getDocumentContent(documentId)
             .then((fetched) => {
-                cache.set(fetched);
-                if (!cancelled) setSettled({ documentId, error: null });
+                if (!cancelled) {
+                    cache.set(fetched);
+                    setSettled({ documentId, error: null });
+                }
             })
             .catch((e) => {
                 if (!cancelled) {
